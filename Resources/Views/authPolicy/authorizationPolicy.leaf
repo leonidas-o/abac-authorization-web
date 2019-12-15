@@ -1,0 +1,142 @@
+#set("body") {
+<h1>#(title)</h1>
+
+<form class="mb-5" method="post" #if(formActionAuthPolicy){action="#(formActionAuthPolicy)"}>
+    
+    #if(editing) {
+    <input type="hidden" name="id" id="id" value="#(authPolicy.id)"/>
+    }
+    
+    
+    <div class="form-group row">
+        <label for="role_name" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Role Name</label>
+        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+            <select name="roleName" class="form-control" id="role_name">
+                #for(name in roleNames) {
+                <option value="#(name)" #if(editing){ #if(name==authPolicy.roleName){selected} }>#(name)</option>
+                }
+            </select>
+        </div>
+    </div>
+    
+    
+    <div class="form-group row">
+        <label for="action_key_value" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Action</label>
+        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+            <select name="action" class="form-control" id="action_key_value">
+                #for(action in actions) {
+                <option value="#(action)" #if(editing){ #if(action==selectedAction){selected} }>#(action)</option>
+                }
+            </select>
+        </div>
+        
+    </div>
+    <div class="form-group row">
+        <label for="resource_key_value" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Resource</label>
+        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+            <select name="resource" class="form-control" id="resource_key_value">
+                #for(resource in resources) {
+                <option value="#(resource)" #if(editing){ #if(resource==selectedResource){selected} }>#(resource)</option>
+                }
+            </select>
+        </div>
+    </div>
+    <input type="hidden" name="actionOnResourceKey" id="action_on_resource_key" #if(editing){value="#(authPolicy.actionOnResourceKey)"}/>
+    
+    
+    <div class="form-group row">
+        <label for="action_on_resource_value_true" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Action-On-Resource Value</label>
+        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+            <div class="form-check">
+                <input class="form-check-input" type="radio" checked name="actionOnResourceValue" id="action_on_resource_value_true" value="true" #if(editing){ #if(authPolicy.actionOnResourceValue == "true"){ checked} }>
+                    <label class="form-check-label" for="action_on_resource_value_true">
+                        True
+                    </label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="actionOnResourceValue" id="action_on_resource_value_false" value="false" #if(editing){ #if(authPolicy.actionOnResourceValue == "false"){ checked} }>
+                    <label class="form-check-label" for="action_on_resource_value_false">
+                        False
+                    </label>
+            </div>
+        </div>
+    </div>
+    
+    
+    <button type="submit" class="btn btn-primary">
+        #if(editing){Update} else {Submit}
+    </button>
+</form>
+
+#if(editing) {
+    <h2>#(titleConditions) <a href="#(createConditionURI)" class="btn btn-outline-primary btn-lg"><i class="fas fa-plus align-middle"></i></a></h2>
+    #if(authPolicy.conditionValues) {
+    <div class="table-responsive">
+    <table  class="table table-bordered table-hover">
+        <thead class="thead-light">
+            <tr>
+                <th>#</th>
+                <th>Key</th>
+                <th>Type</th>
+                <th>Operation</th>
+                <th>LHS Type</th>
+                <th>LHS</th>
+                <th>RHS Type</th>
+                <th>RHS</th>
+                <th>Options</th>
+            </tr>
+        </thead>
+        <tbody>
+            #for(condition in authPolicy.conditionValues) {
+            <tr>
+                <td>#(index+1)</td>
+                <td>#(condition.key)</td>
+                <td>#(condition.type)</td>
+                <td>#(condition.operation)</td>
+                <td>#(condition.lhsType)</td>
+                <td>#(condition.lhs)</td>
+                <td>#(condition.rhsType)</td>
+                <td>#(condition.rhs)</td>
+                <td>
+                    <div class="d-inline-flex">
+                        <form method="post" #if(formActionConditionUpdate){action="#(formActionConditionUpdate)"} class="d-inline mr-2">
+                            <input type="hidden" name="id" id="id" value="#(condition.id)"/>
+                            <input type="hidden" name="key" id="key" value="#(condition.key)"/>
+                            <input type="hidden" name="type" id="type" value="#(condition.type)"/>
+                            <input type="hidden" name="operation" id="operation" value="#(condition.operation)"/>
+                            <input type="hidden" name="lhsType" id="lhs_type" value="#(condition.lhsType)"/>
+                            <input type="hidden" name="lhs" id="lhs" value="#(condition.lhs)"/>
+                            <input type="hidden" name="rhsType" id="rhs_type" value="#(condition.rhsType)"/>
+                            <input type="hidden" name="rhs" id="rhs" value="#(condition.rhs)"/>
+                            <input type="hidden" name="authorizationPolicyID" id="authorization_policy_id" value="#(condition.authorizationPolicyID)"/>
+                            <button type="submit" class="btn btn-outline-primary btn-sm mb-1"><i class="fas fa-edit align-middle"></i></button>
+                        </form>
+                        <form method="post" #if(formActionConditionDelete){action="#(formActionConditionDelete)"} class="d-inline">
+                            <input type="hidden" name="id" id="id" value="#(condition.id)"/>
+                            <input type="hidden" name="key" id="key" value="#(condition.key)"/>
+                            <input type="hidden" name="type" id="type" value="#(condition.type)"/>
+                            <input type="hidden" name="operation" id="operation" value="#(condition.operation)"/>
+                            <input type="hidden" name="lhsType" id="lhs_type" value="#(condition.lhsType)"/>
+                            <input type="hidden" name="lhs" id="lhs" value="#(condition.lhs)"/>
+                            <input type="hidden" name="rhsType" id="rhs_type" value="#(condition.rhsType)"/>
+                            <input type="hidden" name="rhs" id="rhs" value="#(condition.rhs)"/>
+                            <input type="hidden" name="authorizationPolicyID" id="authorization_policy_id" value="#(condition.authorizationPolicyID)"/>
+                            <button type="submit" class="btn btn-outline-danger btn-sm mb-1"><i class="fas fa-trash-alt align-middle"></i></button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            }
+        </tbody>
+    </table>
+    </div>
+
+    } else {
+    <p>No condition values yet!</p>
+    }
+}
+
+
+}
+
+#embed("base")

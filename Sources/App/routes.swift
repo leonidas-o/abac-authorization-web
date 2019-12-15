@@ -2,19 +2,30 @@ import Crypto
 import Vapor
 
 /// Register your application's routes here.
-public func routes(_ router: Router) throws {
-    // public routes
-    let userController = UserController()
-    router.post("users", use: userController.create)
+public func routes(_ router: Router, _ app: Container) throws {
     
-    // basic / password auth protected routes
-    let basic = router.grouped(User.basicAuthMiddleware(using: BCryptDigest()))
-    basic.post("login", use: userController.login)
+    let cacheStore = try app.make(RedisStore.self)
+    let userPersistenceStore = try app.make(UserPostgreSQLStore.self)
+    let rolePersistenceStore = try app.make(RolePostgreSQLStore.self)
+    let authPolicyPersistenceStore = try app.make(AuthorizationPolicyPersistenceStore.self)
     
-    // bearer / token auth protected routes
-    let bearer = router.grouped(User.tokenAuthMiddleware())
-    let todoController = TodoController()
-    bearer.get("todos", use: todoController.index)
-    bearer.post("todos", use: todoController.create)
-    bearer.delete("todos", Todo.parameter, use: todoController.delete)
+
+    let authController = AuthController(userStore: userPersistenceStore, cache: cacheStore)
+    try router.register(collection: authController)
+    
+    let indexController = IndexController()
+    try router.register(collection: indexController)
+    
+    let usersController = UserController(store: userPersistenceStore, cache: cacheStore)
+    try router.register(collection: usersController)
+    
+    let rolesController = RolesController(store: rolePersistenceStore, cache: cacheStore)
+    try router.register(collection: rolesController)
+
+    let authPolicyController = AuthorizationPolicyController(authPolicyStore: authPolicyPersistenceStore, roleStore: rolePersistenceStore, cache: cacheStore)
+    try router.register(collection: authPolicyController)
+    
+    let todosController = TodoController(cache: cacheStore)
+    try router.register(collection: todosController)
+    
 }

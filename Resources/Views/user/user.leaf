@@ -1,0 +1,77 @@
+#set("body") {
+<h1>#(title)</h1>
+
+<form class="mb-5" method="post" #if(formAction){action="#(formAction)"}>
+    
+    #if(editing) {
+    <input type="hidden" name="id" id="id" value="#(userData.user.id)"/>
+    }
+    
+    <div class="form-group row">
+        <label for="first_name" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">First Name</label>
+        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+         <input type="text" name="name" class="form-control" id="name" #if(editing){value="#(userData.user.name)"}/>
+        </div>
+    </div>
+    
+    <div class="form-group row">
+        <label for="email" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Email</label>
+        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+        <input type="text" name="email" class="form-control" id="email" #if(editing){value="#(userData.user.email)"}/>
+        </div>
+    </div>
+    
+    <button type="submit" class="btn btn-primary">
+        #if(editing){Update} else {Submit}
+    </button>
+</form>
+
+
+#if(editing) {
+<h2>#(titleRoles) <a href="#(addRolesURI)" class="btn btn-outline-primary btn-lg"><i class="fas fa-plus align-middle"></i></a></h2>
+#if(userData.roles) {
+<div class="table-responsive">
+    <table  class="table table-bordered table-hover">
+        <thead class="thead-light">
+            <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Options</th>
+            </tr>
+        </thead>
+        <tbody>
+            #for(role in userData.roles) {
+            <tr>
+                <td>#(index+1)</td>
+                <td>#(role.name)</td>
+                <td>
+                    <div class="d-inline-flex">
+                        <form method="post" #if(formActionRoleUpdate){action="#(formActionRoleUpdate)"} class="d-inline mr-2">
+                            <input type="hidden" name="id" id="role_id_update" value="#(role.id)"/>
+                            <input type="hidden" name="name" id="role_name_update" value="#(role.name)"/>
+                            <button type="submit" class="btn btn-outline-primary btn-sm mb-1"><i class="fas fa-edit align-middle"></i></button>
+                        </form>
+                        <form method="post" #if(formActionRoleDelete){action="#(formActionRoleDelete)"} class="d-inline">
+                            <input type="hidden" name="id" id="role_id_delete" value="#(role.id)"/>
+                            <input type="hidden" name="name" id="role_name_delete" value="#(role.name)"/>
+                            <button type="submit" class="btn btn-outline-danger btn-sm mb-1"><i class="fas fa-trash-alt align-middle"></i></button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+} else {
+<p>No Roles assigned yet!</p>
+}
+}
+
+
+
+
+}
+
+#embed("base")

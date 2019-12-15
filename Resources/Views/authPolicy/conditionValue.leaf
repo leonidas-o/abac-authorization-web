@@ -1,0 +1,94 @@
+#set("body") {
+<h1>#(title)</h1>
+
+<form method="post" #if(formActionConditionValue){action="#(formActionConditionValue)"}>
+    
+    #if(editing) {
+    <input type="hidden" name="id" id="id" value="#(conditionValueDB.id)"/>
+    }
+    
+    
+    <div class="form-group row">
+        <label for="role_name" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Key*</label>
+        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+        <input type="text" name="key" class="form-control" id="key" #if(editing){value="#(conditionValueDB.key)"}/>
+        </div>
+    </div>
+    
+    
+    <div class="form-group row">
+        <label for="type" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Operation On Types</label>
+        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+            <select name="type" class="form-control" id="type">
+                #for(type in possibleTypes) {
+                <option value="#(type)" #if(editing){ #if(type==conditionValueDB.type){selected} }>#(type)</option>
+                }
+            </select>
+        </div>
+    </div>
+    
+    
+    <div class="form-group row mb-5">
+        <label for="operation" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Operation</label>
+        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+            <select name="operation" class="form-control" id="operation">
+                #for(operation in possibleOperations) {
+                <option value="#(operation)" #if(editing){ #if(operation==conditionValueDB.operation){selected} }>#(operation)</option>
+                }
+            </select>
+        </div>
+    </div>
+    
+    
+    <div class="form-group row">
+        <label for="lhs_type" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Left-Hand Side Type</label>
+        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+            <select name="lhsType" class="form-control" id="lhs_type">
+                #for(type in possibleLhsRhsTypes) {
+                <option value="#(type)" #if(editing){ #if(type==conditionValueDB.lhsType){selected} }>#(type)</option>
+                }
+            </select>
+        </div>
+    </div>
+    <div class="form-group row mb-5">
+        <label for="lhs" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Left-Hand Side</label>
+        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+            <input type="text" name="lhs" class="form-control" id="lhs" #if(editing){value="#(conditionValueDB.lhs)"}/>
+        </div>
+    </div>
+    
+    
+    <div class="form-group row">
+        <label for="rhs_type" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Right-Hand Side Type</label>
+        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+            <select name="rhsType" class="form-control" id="rhs_type">
+                #for(type in possibleLhsRhsTypes) {
+                <option value="#(type)" #if(editing){ #if(type==conditionValueDB.rhsType){selected} }>#(type)</option>
+                }
+            </select>
+        </div>
+    </div>
+    <div class="form-group row mb-5">
+        <label for="rhs" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Right-Hand Side</label>
+        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+            <input type="text" name="rhs" class="form-control" id="rhs" #if(editing){value="#(conditionValueDB.rhs)"}/>
+        </div>
+    </div>
+    
+    <p>* Condition value key has to be unique for its specified authorization policy. If left empty, a default value will be assigned.</p>
+    
+    
+    #if(editing){
+    <input type="hidden" name="authorizationPolicyID" id="authorization_policy_id" value="#(conditionValueDB.authorizationPolicyID)"/>
+    } else {
+    <input type="hidden" name="authorizationPolicyID" id="authorization_policy_id" value="#(authPolicyID)"/>
+    }
+    
+    <button type="submit" class="btn btn-primary">
+        #if(editing){Update} else {Submit}
+    </button>
+</form>
+
+}
+
+#embed("base")

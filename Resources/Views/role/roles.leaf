@@ -1,0 +1,47 @@
+#set("body") {
+<h1>#(title) <a href="/roles/create" class="btn btn-outline-primary btn-lg"><i class="fas fa-plus align-middle"></i></a></h1>
+
+#if(content) {
+
+<div class="table-responsive">
+<table  class="table table-bordered table-hover">
+    <thead class="thead-light">
+        <tr>
+            <th>#</th>
+            <th>id</th>
+            <th>Role Name</th>
+            <th>Options</th>
+        </tr>
+    </thead>
+    <tbody>
+        #for(role in content.source) {
+        <tr>
+            <td>#(index+1)</td>
+            <td>#(role.id)</td>
+            <td>#(role.name)</td>
+            <td>
+                <div class="d-inline-flex">
+                    <form method="post" #if(formActionUpdate){action="#(formActionUpdate)"} class="d-inline mr-2">
+                        <input type="hidden" name="id" id="role_id_update" value="#(role.id)"/>
+                        <input type="hidden" name="name" id="role_name_update" value="#(role.name)"/>
+                        <button type="submit" class="btn btn-outline-primary btn-sm mb-1"><i class="fas fa-edit align-middle"></i></button>
+                    </form>
+                    <form method="post" #if(formActionDelete){action="#(formActionDelete)"} class="d-inline">
+                        <input type="hidden" name="id" id="role_id_delete" value="#(role.id)"/>
+                        <input type="hidden" name="name" id="role_name_delete" value="#(role.name)"/>
+                        <button type="submit" class="btn btn-outline-danger btn-sm mb-1"><i class="fas fa-trash-alt align-middle"></i></button>
+                    </form>
+                </div>
+            </td>
+        </tr>
+        }
+    </tbody>
+</table>
+</div>
+
+} else {
+<h2>No Roles yet!</h2>
+}
+}
+
+#embed("base")
