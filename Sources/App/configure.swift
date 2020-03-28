@@ -81,13 +81,14 @@ public func configure(_ config: inout Config, _ env: inout Environment, _ servic
 
     /// Configure migrations
     var migrations = MigrationConfig()
-    migrations.add(model: User.self, database: .psql)
-    migrations.add(model: Role.self, database: .psql)
-    migrations.add(model: UserRolePivot.self, database: .psql)
+    // https://forums.swift.org/t/vapor-3-swift-5-2-regression/34764
+    migrations.add(model: User.self, database: DatabaseIdentifier<User.Database>.psql)
+    migrations.add(model: Role.self, database: DatabaseIdentifier<Role.Database>.psql)
+    migrations.add(model: UserRolePivot.self, database: DatabaseIdentifier<UserRolePivot.Database>.psql)
     //migrations.add(model: UserToken.self, database: .psql)
-    migrations.add(model: Todo.self, database: .psql)
-    migrations.add(model: AuthorizationPolicy.self, database: .psql)
-    migrations.add(model: ConditionValueDB.self, database: .psql)
+    migrations.add(model: Todo.self, database: DatabaseIdentifier<Todo.Database>.psql)
+    migrations.add(model: AuthorizationPolicy.self, database: DatabaseIdentifier<AuthorizationPolicy.Database>.psql)
+    migrations.add(model: ConditionValueDB.self, database: DatabaseIdentifier<ConditionValueDB.Database>.psql)
     // Migrations
     migrations.add(migration: AdminUser.self, database: .psql)
     migrations.add(migration: AdminRole.self, database: .psql)

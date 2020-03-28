@@ -9,7 +9,7 @@ let package = Package(
         .package(url: "https://github.com/vapor/auth.git", from: "2.0.0"),
         .package(url: "https://github.com/vapor/leaf.git", from: "3.0.0"),
         .package(url: "https://github.com/vapor/redis.git", from: "3.0.0"),
-        .package(url: "https://github.com/leonidas-o/abac-authorization.git", .exact("0.9.0-alpha.1"))
+        .package(url: "https://github.com/leonidas-o/abac-authorization.git", .exact("0.9.0-alpha.2"))
     ],
     targets: [
         .target(name: "App", dependencies: ["Leaf", "Redis", "ABACAuthorization", "Authentication", "FluentPostgreSQL", "Vapor"]),
