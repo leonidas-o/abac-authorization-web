@@ -1,7 +1,7 @@
 #set("body") {
 <h1>#(title)</h1>
 
-<form class="mb-5" method="post" #if(formActionAuthPolicy){action="#(formActionAuthPolicy)"}>
+<form id="auth_policy_form" class="mb-5" method="post" #if(formActionAuthPolicy){action="#(formActionAuthPolicy)"}>
     
     #if(editing) {
     <input type="hidden" name="id" id="id" value="#(authPolicy.id)"/>
