@@ -4,8 +4,18 @@ import ABACAuthorization
 public struct APIResource {
     
     public static let _apiEntry: String = "api"
+    
+    public static let _all: [String] = Resource.allCases.map { $0.rawValue }.sorted { $0 < $1 }
+    
+    public static let _allProtected: [String] = [
+        APIResource.Resource.authorizationPolicy,
+        APIResource.Resource.todos,
+        APIResource.Resource.users,
+        APIResource.Resource.myUser,
+        APIResource.Resource.roles,
+        APIResource.Resource.conditionValueDB,
+        ].map { $0.rawValue }.sorted { $0 < $1 }
 
-    /// API resources (also pivot tables)
     public enum Resource: String, CaseIterable {
         case login = "login"
         case authorizationPolicy = "authorization-policies"
@@ -14,7 +24,6 @@ public struct APIResource {
         case myUser = "my-user"
         case roles = "roles"
         case conditionValueDB = "condition-values"
-        case rolesUsers = "roles_users"
     }
     
     public init() {}
@@ -31,7 +40,7 @@ extension APIResource: ABACAPIResourceable {
     }
     public var all: [String] {
         get {
-            return Resource.allCases.map{ $0.rawValue }
+            return APIResource._allProtected
         }
     }
 }
