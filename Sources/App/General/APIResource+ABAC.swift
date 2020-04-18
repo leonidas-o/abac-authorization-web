@@ -2,8 +2,8 @@ import Foundation
 import ABACAuthorization
 
 public struct APIResource {
-    public var apiEntry: String = "api"
-    public var all: [String] = Resource.allCases.map{$0.rawValue}
+    
+    public static let _apiEntry: String = "api"
 
     /// API resources (also pivot tables)
     public enum Resource: String, CaseIterable {
@@ -20,9 +20,18 @@ public struct APIResource {
     public init() {}
 }
 
-extension APIResource {
-    public static let _apiEntry: String = "api"
-    public static let _all: [String] = Resource.allCases.map{$0.rawValue}
-}
 
-extension APIResource: ABACAPIResourceable {}
+
+
+extension APIResource: ABACAPIResourceable {
+    public var apiEntry: String {
+        get {
+            return APIResource._apiEntry
+        }
+    }
+    public var all: [String] {
+        get {
+            return Resource.allCases.map{ $0.rawValue }
+        }
+    }
+}

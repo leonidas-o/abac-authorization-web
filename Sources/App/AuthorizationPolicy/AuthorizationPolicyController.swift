@@ -164,7 +164,7 @@ final class AuthorizationPolicyController: RouteCollection {
             
             let roleNames = apiResponse.source.map{ $0.name }
             let actions = ABACAPIAction.allCases.map{ "\($0)" }
-            let resources = APIResource._all
+            let resources = APIResource.Resource.allCases.map{ $0.rawValue }
             
             let context = CreateAuthorizationPolicyContext(
                 title: "Create Authorization Policy",
@@ -208,7 +208,7 @@ final class AuthorizationPolicyController: RouteCollection {
             
             let roleNames = roles.source.map{ $0.name }
             let actions = ABACAPIAction.allCases.map{ "\($0)" }
-            let resources = APIResource._all
+            let resources = APIResource.Resource.allCases.map{ $0.rawValue }
             let actionOnResourceKey = try self.splitActionOnResource(fromKey: authPolicyWithConditions.actionOnResourceKey, allActions: actions, allResources: resources)
             
             let context = UpdateAuthorizationPolicyContext(
@@ -250,7 +250,7 @@ final class AuthorizationPolicyController: RouteCollection {
     func deletePostHandler(_ req: Request, authPolicy: APIAuthorizationPolicy) throws -> Future<View> {
         let roleName = authPolicy.roleName // no need to request the api
         let actions = ABACAPIAction.allCases.map{ "\($0)" }
-        let resources = APIResource._all
+        let resources = APIResource.Resource.allCases.map{ $0.rawValue }
         let actionOnResourceKey = try self.splitActionOnResource(fromKey: authPolicy.actionOnResourceKey, allActions: actions, allResources: resources)
         
         let context = DeleteAuthorizationPolicyContext(
