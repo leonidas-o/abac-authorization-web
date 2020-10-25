@@ -5,10 +5,10 @@ import ABACAuthorization
 
 struct RestrictedABACAuthorizationPoliciesMigration: Migration {
     
-    let readAuthPolicyActionOnResource = "\(ABACAPIAction.read)\(APIResource.Resource.abacAuthPolicies.rawValue)"
-    let createAuthPolicyActionOnResource = "\(ABACAPIAction.create)\(APIResource.Resource.abacAuthPolicies.rawValue)"
-    let readRoleActionOnResource = "\(ABACAPIAction.read)\(APIResource.Resource.roles.rawValue)"
-    let readAuthActionOnResource = "\(ABACAPIAction.read)\(APIResource.Resource.auth.rawValue)"
+    let readAuthPolicies = "\(ABACAPIAction.read)\(APIResource.Resource.abacAuthPolicies.rawValue)"
+    let createAuthPolicies = "\(ABACAPIAction.create)\(APIResource.Resource.abacAuthPolicies.rawValue)"
+    let readRoles = "\(ABACAPIAction.read)\(APIResource.Resource.roles.rawValue)"
+    let readAuths = "\(ABACAPIAction.read)\(APIResource.Resource.auth.rawValue)"
     
     
     func prepare(on database: Database) -> EventLoopFuture<Void> {
@@ -16,22 +16,22 @@ struct RestrictedABACAuthorizationPoliciesMigration: Migration {
             
             let readAuthPolicy = ABACAuthorizationPolicyModel(
                 roleName: role.name,
-                actionKey: readAuthPolicyActionOnResource,
+                actionKey: readAuthPolicies,
                 actionValue: true)
             
             let writeAuthPolicy = ABACAuthorizationPolicyModel(
                 roleName: role.name,
-                actionKey: createAuthPolicyActionOnResource,
+                actionKey: createAuthPolicies,
                 actionValue: true)
             
             let readRole = ABACAuthorizationPolicyModel(
                 roleName: role.name,
-                actionKey: readRoleActionOnResource,
+                actionKey: readRoles,
                 actionValue: true)
             
             let readAuth = ABACAuthorizationPolicyModel(
                 roleName: role.name,
-                actionKey: readAuthActionOnResource,
+                actionKey: readAuths,
                 actionValue: true)
             
             
@@ -51,19 +51,19 @@ struct RestrictedABACAuthorizationPoliciesMigration: Migration {
             let deleteResults = [
                 ABACAuthorizationPolicyModel.query(on: database)
                     .filter(\.$roleName == role.name)
-                    .filter(\.$actionKey == readAuthPolicyActionOnResource)
+                    .filter(\.$actionKey == readAuthPolicies)
                     .delete(),
                 ABACAuthorizationPolicyModel.query(on: database)
                     .filter(\.$roleName == role.name)
-                    .filter(\.$actionKey == createAuthPolicyActionOnResource)
+                    .filter(\.$actionKey == createAuthPolicies)
                     .delete(),
                 ABACAuthorizationPolicyModel.query(on: database)
                     .filter(\.$roleName == role.name)
-                    .filter(\.$actionKey == readRoleActionOnResource)
+                    .filter(\.$actionKey == readRoles)
                     .delete(),
                 ABACAuthorizationPolicyModel.query(on: database)
                     .filter(\.$roleName == role.name)
-                    .filter(\.$actionKey == readAuthActionOnResource)
+                    .filter(\.$actionKey == readAuths)
                     .delete(),
             ]
             return deleteResults.flatten(on: database.eventLoop)
