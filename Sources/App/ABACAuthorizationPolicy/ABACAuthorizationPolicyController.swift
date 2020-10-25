@@ -219,7 +219,7 @@ struct ABACAuthorizationPolicyController: RouteCollection {
             
             let roleNames = apiResponse.map { $0.name }
             let actions = ABACAPIAction.allCases.map { "\($0)" }
-            let resources = APIResource.Resource.allCases.map { $0.rawValue }
+            let resources = APIResource._allProtected
             
             let context = CreateAuthorizationPolicyContext(
                 title: "Create Authorization Policy",
