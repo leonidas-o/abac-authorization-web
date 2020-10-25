@@ -1,5 +1,5 @@
 $('#auth_policy_form').submit(function() {
-   $('#action_on_resource_key').val(
+   $('#action_key').val(
         $('#action_key_value').val() + $('#resource_key_value').val()
     );
 });
