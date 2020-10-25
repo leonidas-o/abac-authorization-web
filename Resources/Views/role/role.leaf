@@ -1,25 +1,23 @@
-#set("body") {
-<h1>#(title)</h1>
+#extend("base"):
+    #export("body"):
+        <h1>#(title)</h1>
 
-<form method="post" #if(formAction){action="#(formAction)"}>
-    
-    #if(editing) {
-    <input type="hidden" name="id" id="id" value="#(role.id)"/>
-    }
-    
-    <div class="form-group row">
-        <label for="name" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Role Name</label>
-        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
-            <input type="text" name="name" class="form-control" id="name" #if(editing){value="#(role.name)"}/>
-        </div>
-    </div>
-    
-    <button type="submit" class="btn btn-primary">
-        #if(editing){Update} else {Submit}
-    </button>
-</form>
-
-}
-
-#embed("base")
-
+        <form method="post" #if(formAction): action="#(formAction)" #endif>
+            
+            #if(editing):
+            <input type="hidden" name="id" id="id" value="#(role.id)"/>
+            #endif
+            
+            <div class="form-group row">
+                <label for="name" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Role Name</label>
+                <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+                    <input type="text" name="name" class="form-control" id="name" #if(editing): value="#(role.name)" #endif/>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">
+                #if(editing): Update #else: Submit #endif
+            </button>
+        </form>
+    #endexport
+#endextend

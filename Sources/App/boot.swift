@@ -1,18 +1,22 @@
 import Vapor
 import ABACAuthorization
+import FluentSQL
+
 
 /// Called after your application has initialized.
-public func boot(_ app: Application) throws {
+func boot(_ app: Application) throws {
     
-    let conn = try app.newConnection(to: .psql).wait()
+    // MARK: ABACAuthorization
     
-    // MARK: Authorization
-     
-    let rules = try AuthorizationPolicy.query(on: conn).all().wait()
-    let inMemoryAuthorizationPolicy = try app.make(InMemoryAuthorizationPolicy.self)
-    for rule in rules {
-        let conditionValues = try rule.conditionValues.query(on: conn).all().wait()
-        try inMemoryAuthorizationPolicy.addToInMemoryCollection(authPolicy: rule, conditionValues: conditionValues)
+    if let sql = app.db as? SQLDatabase {
+        let query = SQLQueryString("SELECT EXISTS (SELECT FROM pg_tables where tablename  = '" + ABACAuthorizationPolicyModel.schema + "');")
+        let abacPolicySchema = try sql.raw(query).first(decoding: [String:Bool].self).wait()
+        if abacPolicySchema?.first?.value == true {
+            let policies = try app.abacAuthorizationRepo.getAllWithConditions().wait()
+            for policy in policies {
+                try app.abacAuthorizationPolicyService.addToInMemoryCollection(policy: policy, conditions: policy.conditions)
+            }
+        }
     }
 
 }

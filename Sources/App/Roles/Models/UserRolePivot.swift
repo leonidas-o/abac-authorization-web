@@ -1,30 +1,41 @@
-import FluentPostgreSQL
+import Fluent
 import Foundation
 
-final class UserRolePivot: PostgreSQLUUIDPivot {
+
+final class UserRolePivot: Model {
     
-    var id: UUID?
-    var userID: User.ID
-    var roleID: Role.ID
+    static let schema = "user_role_pivot"
     
-    typealias Left = User
-    typealias Right = Role
+    @ID(key: .id) var id: UUID?
+    @Parent(key: "user_id") var user: UserModel
+    @Parent(key: "role_id") var role: RoleModel
+
+    init() {}
     
-    static let leftIDKey: LeftIDKey = \.userID
-    static let rightIDKey: RightIDKey = \.roleID
-    
-    init(_ user: User, _ role: Role) throws {
-        self.userID = try user.requireID()
-        self.roleID = try role.requireID()
+    init(id: UUID? = nil, user: UserModel, role: RoleModel) throws {
+        self.id = id
+        self.$user.id = try user.requireID()
+        self.$role.id = try role.requireID()
     }
+    
 }
 
-extension UserRolePivot: ModifiablePivot {}
-extension UserRolePivot: Migration {
-    static func prepare(on connection: PostgreSQLConnection) -> Future<Void> {
-        return Database.create(self, on: connection) { builder in
-            try addProperties(to: builder)
-            builder.reference(from: \.userID, to: \User.id, onDelete: .cascade)
-        }
+
+
+// MARK: - Migration
+
+struct UserRolePivotMigration: Migration {
+    func prepare(on database: Database) -> EventLoopFuture<Void> {
+        database.schema("user_role_pivot")
+            .id()
+            .field("user_id", .uuid, .required, .references("user", "id", onDelete: .cascade))
+            .field("role_id", .int, .required, .references("role", "id", onDelete: .cascade))
+            .unique(on: "user_id", "role_id")
+            .create()
+    }
+
+    func revert(on database: Database) -> EventLoopFuture<Void> {
+        database.schema("user_role_pivot")
+            .delete()
     }
 }

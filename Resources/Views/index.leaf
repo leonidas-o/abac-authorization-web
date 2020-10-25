@@ -1,8 +1,6 @@
-#set("body") {
-    <h1>#(title)</h1>
-
-    <p>Hello #(user.name)</p>
-    
-}
-
-#embed("base")
+#extend("base"):
+    #export("body"):
+        <h1>#(title)</h1>
+        <p>Hello #(user.name)</p>
+    #endexport
+#endextend

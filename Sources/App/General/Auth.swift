@@ -2,30 +2,19 @@ import Vapor
 import Foundation
 import Redis
 
-final class Auth {
+/// Backend auth session management
+struct Auth {
     
-    private let req: Request
-    
-    init(req: Request) {
-        self.req = req
-    }
-    
+    let req: Request
     
     
     func loggedOut() {
-        do {
-            try req.session()[APITokensResponse.Constant.defaultsAccessToken] = ""
-        } catch {
-            fatalError("Cache: Could not remove tokens")
-        }
+        req.session.data[TokensResponse.Constant.defaultsAccessToken] = ""
     }
     
-    func loggedIn(with fetchedTokens: APITokensResponse) {
-        do {
-            try req.session()[APITokensResponse.Constant.defaultsAccessToken] = fetchedTokens.accessData.token
-        } catch {
-            fatalError("Cache: Could not set tokens")
-        }
+    
+    func loggedIn(with fetchedTokens: TokensResponse) {
+        req.session.data[TokensResponse.Constant.defaultsAccessToken] = fetchedTokens.accessData.token
     }
     
     
@@ -40,26 +29,9 @@ final class Auth {
         }
     }
     
+    
     func getAccessToken() -> String? {
-        do {
-            return try req.session()[APITokensResponse.Constant.defaultsAccessToken] ?? nil
-        } catch {
-            return nil
-        }
+        return req.session.data[TokensResponse.Constant.defaultsAccessToken] ?? nil
     }
     
-}
-
-
-public struct APITokensResponse: Codable {
-    
-    public enum Constant {
-        public static let defaultsAccessToken = "API-ACCESSTOKEN"
-    }
-
-    var accessData: AccessData
-    
-    init(accessData: AccessData) {
-        self.accessData = accessData
-    }
 }

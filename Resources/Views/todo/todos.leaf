@@ -1,54 +1,53 @@
-#set("body") {
+#extend("base"):
+    #export("body"):
 
-<!-- NOT IMPLEMENTED
-<h1>#(title) <a href="/todos/create" class="btn btn-outline-primary btn-lg"><i class="fas fa-plus align-middle"></i></a></h1>
--->
-<h1>#(title) <a class="btn btn-outline-primary btn-lg"><i class="fas fa-plus align-middle"></i></a></h1>
+        <!-- NOT IMPLEMENTED
+        <h1>#(title) <a href="/todos/create" class="btn btn-outline-primary btn-lg"><i class="fas fa-plus align-middle"></i></a></h1>
+        -->
+        <h1>#(title) <a class="btn btn-outline-primary btn-lg"><i class="fas fa-plus align-middle"></i></a></h1>
 
-    #if(content) {
+        #if(content):
 
-    <div class="table-responsive">
-    <table  class="table table-bordered table-hover">
-        <thead class="thead-light">
-            <tr>
-                <th>#</th>
-                <th>title</th>
-                <th>userID</th>
-                <th>Options</th>
-            </tr>
-        </thead>
-        <tbody>
-            #for(todo in content) {
-            <tr>
-                <td>#(index+1)</td>
-                <td>#(todo.title)</td>
-                <td>#(todo.userID)</td>
-                <td>
-                    <div class="d-inline-flex">
-                        <form method="post" #if(formActionUpdate){action="#(formActionUpdate)"} class="d-inline mr-2">
-                            <input type="hidden" name="id" id="id" value="#(todo.id)"/>
-                            <input type="hidden" name="title" id="title" value="#(todo.title)"/>
-                            <input type="hidden" name="userID" id="user_id" value="#(todo.userID)"/>
-                            <button type="submit" class="btn btn-outline-primary btn-sm mb-1"><i class="fas fa-edit align-middle"></i></button>
-                        </form>
-                        <form method="post" #if(formActionDelete){action="#(formActionDelete)"} class="d-inline">
-                            <input type="hidden" name="id" id="id" value="#(todo.id)"/>
-                            <input type="hidden" name="title" id="title" value="#(todo.title)"/>
-                            <input type="hidden" name="userID" id="user_id" value="#(todo.userID)"/>
-                            <button type="submit" class="btn btn-outline-danger btn-sm mb-1"><i class="fas fa-trash-alt align-middle"></i></button>
-                        </form>
-                    </div>
-                </td>
-            </tr>
-            }
-        </tbody>
-    </table>
-    </div>
+            <div class="table-responsive">
+            <table  class="table table-bordered table-hover">
+                <thead class="thead-light">
+                    <tr>
+                        <th>#</th>
+                        <th>title</th>
+                        <th>userID</th>
+                        <th>Options</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    #for(todo in content):
+                    <tr>
+                        <td>#(index+1)</td>
+                        <td>#(todo.title)</td>
+                        <td>#(todo.userID)</td>
+                        <td>
+                            <div class="d-inline-flex">
+                                <form method="post" #if(formActionUpdate): action="#(formActionUpdate)" #endif class="d-inline mr-2">
+                                    <input type="hidden" name="id" id="id" value="#(todo.id)"/>
+                                    <input type="hidden" name="title" id="title" value="#(todo.title)"/>
+                                    <input type="hidden" name="userID" id="user_id" value="#(todo.userID)"/>
+                                    <button type="submit" class="btn btn-outline-primary btn-sm mb-1"><i class="fas fa-edit align-middle"></i></button>
+                                </form>
+                                <form method="post" #if(formActionDelete): action="#(formActionDelete)" #endif class="d-inline">
+                                    <input type="hidden" name="id" id="id" value="#(todo.id)"/>
+                                    <input type="hidden" name="title" id="title" value="#(todo.title)"/>
+                                    <input type="hidden" name="userID" id="user_id" value="#(todo.userID)"/>
+                                    <button type="submit" class="btn btn-outline-danger btn-sm mb-1"><i class="fas fa-trash-alt align-middle"></i></button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    #endfor
+                </tbody>
+            </table>
+            </div>
+        #else:
+            <h2>No todo's yet!</h2>
+        #endif
 
-
-    } else {
-    <h2>No todo's yet!</h2>
-    }
-}
-
-#embed("base")
+    #endexport
+#endextend

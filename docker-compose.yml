@@ -1,0 +1,32 @@
+version: '3'
+services:
+  postgres:
+    image: postgres
+    container_name: postgres
+    ports: 
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=abacauthweb
+      - POSTGRES_USER=abacauthweb
+      - POSTGRES_PASSWORD=abac12345
+  postgres-test:
+    image: postgres
+    container_name: postgres-test
+    ports: 
+      - "5433:5432"
+    environment:
+      - POSTGRES_DB=abacauthweb-test
+      - POSTGRES_USER=abacauthweb
+      - POSTGRES_PASSWORD=abac12345
+  redis:
+    container_name: redis
+    image: redis
+    hostname: redis
+    ports:
+      - "6379:6379"
+  redis-test:
+    container_name: redis-test
+    image: redis
+    hostname: redis-test
+    ports:
+      - "6380:6379"

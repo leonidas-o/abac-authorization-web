@@ -1,87 +1,85 @@
+#extend("base"):
+    #export("body"):
+        <h1>#(title)</h1>
 
-#set("body") {
-<h1>#(title)</h1>
+        <div class="alert alert-warning" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> Warning: You are about to delete this Condition, continue only if you are sure you want to delete it entirely.
+        </div>
 
-<div class="alert alert-warning" role="alert">
-    <i class="fas fa-exclamation-triangle"></i> Warning: You are about to delete this Condition, continue only if you are sure you want to delete it entirely.
-</div>
-
-<form method="post" #if(formActionConditionValue){action="#(formActionConditionValue)"}>
-    
-    
-    <div class="form-group row">
-        <label for="id" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">UUID</label>
-        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
-            <input readonly type="text" name="id" class="form-control" id="id" value="#(conditionValueDB.id)"/>
-        </div>
-    </div>
-    
-    
-    <div class="form-group row">
-        <label for="role_name" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Key</label>
-        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
-            <input readonly type="text" name="key" class="form-control" id="key" #if(editing){value="#(conditionValueDB.key)"}/>
-        </div>
-    </div>
-    
-    
-    <div class="form-group row">
-        <label for="type" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Type</label>
-        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
-            <input readonly type="text" name="type" class="form-control" id="type" value="#(conditionValueDB.type)"/>
-        </div>
-    </div>
-    
-    
-    <div class="form-group row">
-        <label for="operation" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Operation</label>
-        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
-            <input readonly type="text" name="operation" class="form-control" id="operation" value="#(conditionValueDB.operation)"/>
-        </div>
-    </div>
-    
-    
-    <div class="form-group row">
-        <label for="lhs_type" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Left-Hand Side Type</label>
-        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
-            <input readonly type="text" name="lhsType" class="form-control" id="lhs_type" value="#(conditionValueDB.lhsType)"/>
-        </div>
-    </div>
-    <div class="form-group row">
-        <label for="lhs" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Left-Hand Side</label>
-        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
-            <input readonly type="text" name="lhs" class="form-control" id="lhs" #if(editing){value="#(conditionValueDB.lhs)"}/>
-        </div>
-    </div>
-    
-    
-    <div class="form-group row">
-        <label for="rhs_type" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Right-Hand Side Type</label>
-        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
-            <input readonly type="text" name="rhsType" class="form-control" id="rhs_type" value="#(conditionValueDB.rhsType)"/>
-        </div>
-    </div>
-    <div class="form-group row">
-        <label for="rhs" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Right-Hand Side</label>
-        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
-            <input readonly type="text" name="rhs" class="form-control" id="rhs" #if(editing){value="#(conditionValueDB.rhs)"}/>
-        </div>
-    </div>
-    
-    
-    <div class="form-group row">
-        <label for="authorization_policy_id" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Authorization Policy ID</label>
-        <div class="col-6 col-sm-8 col-md-8 col-lg-9">
-            <input readonly type="text" name="authorizationPolicyID" class="form-control" id="authorization_policy_id" value="#(conditionValueDB.authorizationPolicyID)"/>
-        </div>
-    </div>
-    
-    
-    <button type="submit" class="btn btn-danger">
-        Delete
-    </button>
-</form>
-
-}
-
-#embed("base")
+        <form method="post" #if(formActionConditionValue): action="#(formActionConditionValue)" #endif>
+            
+            
+            <div class="form-group row">
+                <label for="id" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">UUID</label>
+                <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+                    <input readonly type="text" name="id" class="form-control" id="id" value="#(abacCondition.id)"/>
+                </div>
+            </div>
+            
+            
+            <div class="form-group row">
+                <label for="role_name" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Key</label>
+                <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+                    <input readonly type="text" name="key" class="form-control" id="key" #if(editing): value="#(abacCondition.key)" #endif/>
+                </div>
+            </div>
+            
+            
+            <div class="form-group row">
+                <label for="type" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Type</label>
+                <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+                    <input readonly type="text" name="type" class="form-control" id="type" value="#(abacCondition.type)"/>
+                </div>
+            </div>
+            
+            
+            <div class="form-group row">
+                <label for="operation" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Operation</label>
+                <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+                    <input readonly type="text" name="operation" class="form-control" id="operation" value="#(abacCondition.operation)"/>
+                </div>
+            </div>
+            
+            
+            <div class="form-group row">
+                <label for="lhs_type" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Left-Hand Side Type</label>
+                <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+                    <input readonly type="text" name="lhsType" class="form-control" id="lhs_type" value="#(abacCondition.lhsType)"/>
+                </div>
+            </div>
+            <div class="form-group row">
+                <label for="lhs" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Left-Hand Side</label>
+                <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+                    <input readonly type="text" name="lhs" class="form-control" id="lhs" #if(editing): value="#(abacCondition.lhs)" #endif/>
+                </div>
+            </div>
+            
+            
+            <div class="form-group row">
+                <label for="rhs_type" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Right-Hand Side Type</label>
+                <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+                    <input readonly type="text" name="rhsType" class="form-control" id="rhs_type" value="#(abacCondition.rhsType)"/>
+                </div>
+            </div>
+            <div class="form-group row">
+                <label for="rhs" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Right-Hand Side</label>
+                <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+                    <input readonly type="text" name="rhs" class="form-control" id="rhs" #if(editing): value="#(abacCondition.rhs)" #endif/>
+                </div>
+            </div>
+            
+            
+            <div class="form-group row">
+                <label for="authorization_policy_id" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Authorization Policy ID</label>
+                <div class="col-6 col-sm-8 col-md-8 col-lg-9">
+                    <input readonly type="text" name="authorizationPolicyID" class="form-control" id="authorization_policy_id" value="#(abacCondition.authorizationPolicyID)"/>
+                </div>
+            </div>
+            
+            
+            <button type="submit" class="btn btn-danger">
+                Delete
+            </button>
+        </form>
+    #endexport
+#endextend

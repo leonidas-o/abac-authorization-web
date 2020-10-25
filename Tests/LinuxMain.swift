@@ -1,11 +1,1 @@
-#if os(Linux)
-
-import XCTest
-@testable import AppTests
-
-XCTMain([
-    // AppTests
-    testCase(AppTests.allTests)
-])
-
-#endif
+#error("Run the test suite with 'swift test --enable-test-discovery'")

@@ -6,7 +6,7 @@
         <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
         <link href="/styles/font-awesome/css/all.css" rel="stylesheet">
         <link rel="stylesheet" href="/styles/app.css">
-        <title>#get(title)</title>
+        <title>#(title)</title>
     </head>
     <body>
         
@@ -23,16 +23,16 @@
                 
                 
                 <ul class="navbar-nav mr-auto">
-                    <li class="nav-item #if(title == "Activity Tags"){active}">
+                    <li class="nav-item #if(title == "Activity Tags"): active #endif">
                         <a href="/todos" class="nav-link">Todo's</a>
                     </li>
-                    <li class="nav-item #if(title == "Users"){active}">
+                    <li class="nav-item #if(title == "Users"): active #endif">
                         <a href="/users" class="nav-link">Users</a>
                     </li>
-                    <li class="nav-item #if(title == "Roles"){active}">
+                    <li class="nav-item #if(title == "Roles"): active #endif">
                         <a href="/roles" class="nav-link">Roles</a>
                     </li>
-                    <li class="nav-item #if(title == "Auth Policies"){active}">
+                    <li class="nav-item #if(title == "Auth Policies"): active #endif">
                         <a href="/authorization-policies" class="nav-link">Auth Policies</a>
                     </li>
                     
@@ -43,12 +43,12 @@
         </nav>
         
         <div class="container-fluid mt-3">
-            #if(error) {
+            #if(error):
             <div class="alert alert-danger" role="alert">
                 #(error)
             </div>
-            }
-            #get(body)
+            #endif
+            #import("body")
         </div>
         
         <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>

@@ -1,57 +1,55 @@
-#set("body") {
-<h1>#(title) <a href="/users/create" class="btn btn-outline-primary btn-lg"><i class="fas fa-plus align-middle"></i></a></h1>
+#extend("base"):
+    #export("body"):
+        <h1>#(title) <a href="/users/create" class="btn btn-outline-primary btn-lg"><i class="fas fa-plus align-middle"></i></a></h1>
 
-#if(content) {
-
-    <div class="table-responsive" >
-    <table  class="table table-bordered table-hover">
-        <thead class="thead-light">
-            <tr>
-                <th>#</th>
-                <th>id</th>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Roles</th>
-                <th>Options</th>
-            </tr>
-        </thead>
-        <tbody>
-            #for(userData in content.source) {
-            <tr>
-                <td>#(index+1)</td>
-                <td>#(userData.user.id)</td>
-                <td>#(userData.user.name)</td>
-                <td>#(userData.user.email)</td>
-                <td>
-                    #for(role in userData.roles) {
-                        <span>#(role.name)</span>
-                    }
-                </td>
-                <td>
-                    <div class="d-inline-flex">
-                        <form method="post" #if(formActionUpdate){action="#(formActionUpdate)"} class="d-inline mr-2">
-                            <input type="hidden" name="id" id="id" value="#(userData.user.id)"/>
-                            <input type="hidden" name="name" id="name" value="#(userData.user.name)"/>
-                            <input type="hidden" name="email" id="email" value="#(userData.user.email)"/>
-                            <button type="submit" class="btn btn-outline-primary btn-sm"><i class="fas fa-edit align-middle"></i></button>
-                        </form>
-                        <form method="post" #if(formActionDelete){action="#(formActionDelete)"} class="d-inline">
-                            <input type="hidden" name="id" id="id" value="#(userData.user.id)"/>
-                            <input type="hidden" name="name" id="name" value="#(userData.user.name)"/>
-                            <input type="hidden" name="email" id="email" value="#(userData.user.email)"/>
-                            <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fas fa-trash-alt align-middle"></i></button>
-                        </form>
-                    <div>
-                </td>
-            </tr>
-            }
-        </tbody>
-    </table>
-    </div>
-
-    } else {
-    <h2>No users yet!</h2>
-    }
-}
-
-#embed("base")
+        #if(content):
+            <div class="table-responsive" >
+            <table  class="table table-bordered table-hover">
+                <thead class="thead-light">
+                    <tr>
+                        <th>#</th>
+                        <th>id</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Roles</th>
+                        <th>Options</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    #for(userData in content):
+                    <tr>
+                        <td>#(index+1)</td>
+                        <td>#(userData.user.id)</td>
+                        <td>#(userData.user.name)</td>
+                        <td>#(userData.user.email)</td>
+                        <td>
+                            #for(role in userData.roles):
+                                <span>#(role.name)</span>
+                            #endfor
+                        </td>
+                        <td>
+                            <div class="d-inline-flex">
+                                <form method="post" #if(formActionUpdate): action="#(formActionUpdate)" #endif class="d-inline mr-2">
+                                    <input type="hidden" name="id" id="id" value="#(userData.user.id)"/>
+                                    <input type="hidden" name="name" id="name" value="#(userData.user.name)"/>
+                                    <input type="hidden" name="email" id="email" value="#(userData.user.email)"/>
+                                    <button type="submit" class="btn btn-outline-primary btn-sm"><i class="fas fa-edit align-middle"></i></button>
+                                </form>
+                                <form method="post" #if(formActionDelete): action="#(formActionDelete)" #endif class="d-inline">
+                                    <input type="hidden" name="id" id="id" value="#(userData.user.id)"/>
+                                    <input type="hidden" name="name" id="name" value="#(userData.user.name)"/>
+                                    <input type="hidden" name="email" id="email" value="#(userData.user.email)"/>
+                                    <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fas fa-trash-alt align-middle"></i></button>
+                                </form>
+                            <div>
+                        </td>
+                    </tr>
+                    #endfor
+                </tbody>
+            </table>
+            </div>
+        #else:
+            <h2>No users yet!</h2>
+        #endif
+    #endexport
+#endextend

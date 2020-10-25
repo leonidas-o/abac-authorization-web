@@ -2,80 +2,97 @@ import Vapor
 import Crypto
 import ABACAuthorization
 
-protocol RolePersistenceStore: ServiceType {
-    func getAll() -> Future<APIRoleResponse>
-    func _getAllUsersFor(_ role: Role) -> Future<[User]>
-    func save(_ role: Role) -> Future<APIRoleResponse>
-    func update(_ role: Role, _ updatedRole: Role) -> EventLoopFuture<APIRoleResponse>
-    func delete(_ role: Role) -> EventLoopFuture<Void>
+protocol RolePersistenceRepo {
+    func getAll() -> EventLoopFuture<[RoleModel]>
+    func get(_ role: RoleModel) -> EventLoopFuture<RoleModel?>
+    func get(_ roleId: RoleModel.IDValue) -> EventLoopFuture<RoleModel?>
+    func _getAllUsersFor(_ role: RoleModel) -> EventLoopFuture<[UserModel]>
+    func save(_ role: RoleModel) -> EventLoopFuture<Void>
+    func update(_ role: RoleModel, _ updatedRole: Role) -> EventLoopFuture<Void>
+    func delete(_ roleId: RoleModel.IDValue) -> EventLoopFuture<Void>
+    func delete(_ role: RoleModel) -> EventLoopFuture<Void>
 }
+
 
 struct RolesController: RouteCollection {
     
-    private let store: RolePersistenceStore
-    private let cache: CacheStore
-    private let apiResource: ABACAPIResourceable
-    
-    init(store: RolePersistenceStore, cache: CacheStore) {
-        self.store = store
-        self.cache = cache
-        self.apiResource = APIResource()
-    }
+    let cache: CacheRepo
     
     
-    func boot(router: Router) throws {
+    func boot(routes: RoutesBuilder) throws {
+        let bearerAuthenticator = UserModelBearerAuthenticator()
+        let guardMiddleware = UserModel.guardMiddleware()
+        let abacMiddleware = ABACMiddleware<AccessData>(cache: cache, protectedResources: APIResource._allProtected)
         
         // API
-        let mainRoute = router.grouped(APIResource._apiEntry, APIResource.Resource.roles.rawValue)
-                
-        let tokenAuthMiddleware = User.tokenAuthMiddleware()
-        let guardAuthMiddleware = User.guardAuthMiddleware()
-        let abacMiddleware = ABACMiddleware<AccessData>(cache: cache, apiResource: apiResource)
-        let tokenAuthGroup = mainRoute.grouped(tokenAuthMiddleware, guardAuthMiddleware, abacMiddleware)
+        let mainRoute = routes.grouped("\(APIResource._apiEntry)", "\(APIResource.Resource.roles.rawValue)")
+        let gaGroup = mainRoute.grouped(bearerAuthenticator, guardMiddleware, abacMiddleware)
         
-        tokenAuthGroup.get(use: getAllHandler)
-        tokenAuthGroup.get(Role.parameter, "users", use: getUsersHandler)
-        tokenAuthGroup.post(Role.self, use: createHandler)
-        tokenAuthGroup.put(Role.self, at: Role.parameter, use: updateHandler)
-        tokenAuthGroup.delete(Role.parameter, use: deleteHandler)
+        gaGroup.get(use: apiGetAll)
+        gaGroup.get(":roleId", "users", use: apiGetUsers)
+        gaGroup.post(use: apiCreate)
+        gaGroup.put(":roleId", use: apiUpdate)
+        gaGroup.delete(":roleId", use: apiDelete)
         
         
         // FRONTEND
-        let rolesRoute = router.grouped("roles")
+        let rolesRoute = routes.grouped("roles")
         let authGroup = rolesRoute.grouped(UserAuthSessionsMiddleware(apiUrl: APIConnection.url, redirectPath: "/login"))
-        authGroup.get(use: overviewHandler)
+        authGroup.get(use: overview)
         
-        authGroup.get("create", use: createHandler)
-        authGroup.post(Role.self, at: "create", use: createPostHandler)
+        authGroup.get("create", use: create)
+        authGroup.post("create", use: createPost)
     }
   
     
+    
     // MARK: - API
     
-    func getAllHandler(_ req: Request) throws -> Future<APIRoleResponse> {
-        return store.getAll()
-    }
-    
-    func getUsersHandler(_ req: Request) throws -> Future<[User]> {
-        return try req.parameters.next(Role.self).flatMap{ role in
-            return self.store._getAllUsersFor(role)
+    func apiGetAll(_ req: Request) throws -> EventLoopFuture<[Role]> {
+        return req.roleRepo.getAll().map { roles in
+            return roles.map { $0.convertToRole() }
         }
     }
     
-    func createHandler(_ req: Request, role: Role) throws -> Future<APIRoleResponse> {
-        return store.save(role)
-    }
     
-    func updateHandler(_ req: Request, updatedRole: Role) throws -> Future<APIRoleResponse> {
-        return try req.parameters.next(Role.self).flatMap{ role in
-            return self.store.update(role, updatedRole)
+    func apiGetUsers(_ req: Request) throws -> EventLoopFuture<[User.Public]> {
+        guard let roleId = req.parameters.get("roleId", as: Int.self) else {
+            throw Abort(.badRequest)
+        }
+        return req.roleRepo.get(roleId).unwrap(or: Abort(.badRequest)).flatMap { role in
+            return req.roleRepo._getAllUsersFor(role).map { users in
+                return users.map { $0.convertToUserPublic() }
+            }
         }
     }
     
-    func deleteHandler(_ req: Request) throws -> Future<HTTPStatus> {
-        return try req.parameters.next(Role.self).flatMap{ role in
-            self.store.delete(role)
-        }.transform(to: .noContent)
+    
+    func apiCreate(_ req: Request) throws -> EventLoopFuture<Role> {
+        let content = try req.content.decode(Role.self)
+        let role = content.convertToRoleModel()
+        return req.roleRepo.save(role)
+            .transform(to: role.convertToRole())
+    }
+    
+    
+    func apiUpdate(_ req: Request) throws -> EventLoopFuture<Role> {
+        guard let roleId = req.parameters.get("roleId", as: Int.self) else {
+            throw Abort(.badRequest)
+        }
+        let updatedRole = try req.content.decode(Role.self)
+        return req.roleRepo.get(roleId).unwrap(or: Abort(.badRequest)).flatMap { role in
+            return req.roleRepo.update(role, updatedRole)
+                .transform(to: role.convertToRole())
+        }
+    }
+    
+    
+    func apiDelete(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        guard let roleId = req.parameters.get("roleId", as: Int.self) else {
+            throw Abort(.badRequest)
+        }
+        return req.roleRepo.delete(roleId)
+            .transform(to: .noContent)
     }
 
     
@@ -89,17 +106,17 @@ struct RolesController: RouteCollection {
     
     // MARK: Read
     
-    func overviewHandler(_ req: Request) throws -> Future<View> {
-        let roleRequest = ResourceRequest<NoRequestType, APIRoleResponse>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
+    func overview(_ req: Request) throws -> EventLoopFuture<View> {
+        let roleRequest = ResourceRequest<NoRequestType, [Role]>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
         
-        return roleRequest.futureGetAll(on: req).flatMap{ apiResponse in
+        return roleRequest.futureGetAll(req).flatMap { apiResponse in
             let context = RolesOverviewContext(
                 title: "Roles",
                 content: apiResponse,
                 formActionUpdate: "/roles/update",
                 formActionDelete: "/roles/delete",
                 error: req.query[String.self, at: "error"])
-            return try req.view().render("role/roles", context)
+            return req.view.render("role/roles", context)
         }
     }
     
@@ -107,18 +124,19 @@ struct RolesController: RouteCollection {
     
     // MARK: Create
     
-    func createHandler(_ req: Request) throws -> Future<View> {
+    func create(_ req: Request) throws -> EventLoopFuture<View> {
         let context = CreateRoleContext(
             title: "Create Role",
             error: req.query[String.self, at: "error"])
-        return try req.view().render("role/role", context)
+        return req.view.render("role/role", context)
     }
     
-    func createPostHandler(_ req: Request, role: Role) throws -> Future<Response> {
-        let roleRequest = ResourceRequest<Role, APIRoleResponse>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
-        return roleRequest.futureCreate(role, on: req).map{ apiResponse in
+    func createPost(_ req: Request) throws -> EventLoopFuture<Response> {
+        let role = try req.content.decode(Role.self)
+        let roleRequest = ResourceRequest<Role, Role>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
+        return roleRequest.futureCreate(req, resourceToSave: role).map { apiResponse in
             return req.redirect(to: "/roles")
-        }.catchMap{ error in
+        }.flatMapErrorThrowing { error in
             let errorMessage = error.getMessage()
             return req.redirect(to: "/roles/create?error=\(errorMessage)")
         }
@@ -131,7 +149,7 @@ struct RolesController: RouteCollection {
 
 struct RolesOverviewContext: Encodable {
     let title: String
-    let content: APIRoleResponse?
+    let content: [Role]
     let formActionUpdate: String?
     let formActionDelete: String?
     let error: String?

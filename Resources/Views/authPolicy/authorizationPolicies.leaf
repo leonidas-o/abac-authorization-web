@@ -1,68 +1,58 @@
-#set("body") {
-<h1>#(title) <a href="#(createAuthPolicyURI)" class="btn btn-outline-primary btn-lg"><i class="fas fa-plus align-middle"></i></a></h1>
+#extend("base"):
+    #export("body"):
+        <h1>#(title) <a href="#(createAuthPolicyURI)" class="btn btn-outline-primary btn-lg"><i class="fas fa-plus align-middle"></i></a></h1>
 
-    #if(content) {
-    <div class="table-responsive">
-    <table  class="table table-bordered table-hover">
-        <thead class="thead-light">
-            <tr>
-                <th>#</th>
-                <th>Role Name</th>
-                <th>Action-On-Resource Key</th>
-                <th>Action-On-Resource Value</th>
-                <th>Conditions</th>
-                <th>Options</th>
-            </tr>
-        </thead>
-        <tbody>
-            #for(policy in content.source) {
-            <tr>
-                <td>#(index+1)</td>
-                <td>#(policy.roleName)</td>
-                <td>#(policy.actionOnResourceKey)</td>
-                <td>#(policy.actionOnResourceValue)</td>
-                <td>
-                #for(condition in policy.conditionValues) {
-                <p>#(condition.key): #(condition.lhsType)(#(condition.lhs)) #(condition.operation) #(condition.rhsType)(#(condition.rhs)) </p>
-                }
-                </td>
-                <td>
-                    <div class="d-inline-flex">
-                        <form method="post" #if(formActionUpdate){action="#(formActionUpdate)"} class="d-inline mr-2">
-                            <input type="hidden" name="id" id="id" value="#(policy.id)"/>
-                            <input type="hidden" name="roleName" id="role_name" value="#(policy.roleName)"/>
-                            <input type="hidden" name="actionOnResourceKey" id="action_on_resource_key" value="#(policy.actionOnResourceKey)"/>
-                            <input type="hidden" name="actionOnResourceValue" id="action_on_resource_value" value="#(policy.actionOnResourceValue)"/>
-                            <button type="submit" class="btn btn-outline-primary btn-sm"><i class="fas fa-edit align-middle"></i></button>
-                        </form>
-                        <form method="post" #if(formActionDelete){action="#(formActionDelete)"} class="d-inline">
-                            <input type="hidden" name="id" id="id" value="#(policy.id)"/>
-                            <input type="hidden" name="roleName" id="role_name" value="#(policy.roleName)"/>
-                            <input type="hidden" name="actionOnResourceKey" id="action_on_resource_key" value="#(policy.actionOnResourceKey)"/>
-                            <input type="hidden" name="actionOnResourceValue" id="action_on_resource_value" value="#(policy.actionOnResourceValue)"/>
-                            <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fas fa-trash-alt align-middle"></i></button>
-                        </form>
-                    <div>
-                </td>
-            </tr>
-            }
-        </tbody>
-    </table>
-    </div>
+        #if(content):
+            <div class="table-responsive">
+            <table  class="table table-bordered table-hover">
+                <thead class="thead-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Role Name</th>
+                        <th>Action-On-Resource Key</th>
+                        <th>Action-On-Resource Value</th>
+                        <th>Conditions</th>
+                        <th>Options</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    #for(policy in content):
+                    <tr>
+                        <td>#(index+1)</td>
+                        <td>#(policy.roleName)</td>
+                        <td>#(policy.actionKey)</td>
+                        <td>#(policy.actionValue)</td>
+                        <td>
+                        #for(condition in policy.conditions):
+                        <p>#(condition.key): #(condition.lhsType)(#(condition.lhs)) #(condition.operation) #(condition.rhsType)(#(condition.rhs)) </p>
+                        #endfor
+                        </td>
+                        <td>
+                            <div class="d-inline-flex">
+                                <form method="post" #if(formActionUpdate): action="#(formActionUpdate)" #endif class="d-inline mr-2">
+                                    <input type="hidden" name="id" id="id" value="#(policy.id)"/>
+                                    <input type="hidden" name="roleName" id="role_name" value="#(policy.roleName)"/>
+                                    <input type="hidden" name="actionKey" id="action_on_resource_key" value="#(policy.actionKey)"/>
+                                    <input type="hidden" name="actionValue" id="action_on_resource_value" value="#(policy.actionValue)"/>
+                                    <button type="submit" class="btn btn-outline-primary btn-sm"><i class="fas fa-edit align-middle"></i></button>
+                                </form>
+                                <form method="post" #if(formActionDelete): action="#(formActionDelete)" #endif class="d-inline">
+                                    <input type="hidden" name="id" id="id" value="#(policy.id)"/>
+                                    <input type="hidden" name="roleName" id="role_name" value="#(policy.roleName)"/>
+                                    <input type="hidden" name="actionKey" id="action_on_resource_key" value="#(policy.actionKey)"/>
+                                    <input type="hidden" name="actionValue" id="action_on_resource_value" value="#(policy.actionValue)"/>
+                                    <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fas fa-trash-alt align-middle"></i></button>
+                                </form>
+                            <div>
+                        </td>
+                    </tr>
+                    #endfor
+                </tbody>
+            </table>
+            </div>
 
-    } else {
-    <h2>No authorization policies yet!</h2>
-    }
-}
-
-#embed("base")
-
-
-
-
-
-
-
-
-
-
+        #else:
+            <h2>No authorization policies yet!</h2>
+        #endif
+    #endexport
+#endextend

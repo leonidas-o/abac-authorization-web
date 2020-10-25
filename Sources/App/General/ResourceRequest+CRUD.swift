@@ -47,8 +47,7 @@ extension ResourceRequest {
     
     
     
-    func create(_ resourceToSave: RequestType, on container: Container, completion: @escaping (GetResourceRequest<ResponseType>) -> Void) {
-        guard let req = container as? Request else { fatalError() }
+    func create(_ req: Request, resourceToSave: RequestType, completion: @escaping (GetResourceRequest<ResponseType>) -> Void) {
         guard let token = Auth(req: req).getAccessToken() else {
             fatalError("ResourceRequest: Could not retrieve AccessToken")
         }
@@ -63,8 +62,7 @@ extension ResourceRequest {
             self.sendRequestWithDataResponse(urlRequest, completion: completion)
         }
     }
-    func createWithoutDataResponse(_ resourceToSave: RequestType, on container: Container, completion: @escaping (GetResourceRequestStatus<Int>) -> Void) {
-        guard let req = container as? Request else { fatalError() }
+    func createWithoutDataResponse(_ req: Request, resourceToSave: RequestType, completion: @escaping (GetResourceRequestStatus<Int>) -> Void) {
         guard let token = Auth(req: req).getAccessToken() else {
             fatalError("ResourceRequest: Could not retrieve AccessToken")
         }
@@ -96,8 +94,7 @@ extension ResourceRequest {
     }
     
     
-    func getAll(on container: Container, completion: @escaping (GetResourceRequest<ResponseType>) -> Void) {
-        guard let req = container as? Request else { fatalError() }
+    func getAll(_ req: Request, completion: @escaping (GetResourceRequest<ResponseType>) -> Void) {
         let auth = Auth(req: req)
         guard let token = auth.getAccessToken() else {
             fatalError("ResourceRequest: Could not retrieve AccessToken")
@@ -132,8 +129,7 @@ extension ResourceRequest {
     
     
     
-    func update(_ resourceToUpdate: RequestType, on container: Container, completion: @escaping (GetResourceRequest<ResponseType>) -> Void) {
-        guard let req = container as? Request else { fatalError() }
+    func update(_ req: Request, resourceToUpdate: RequestType, completion: @escaping (GetResourceRequest<ResponseType>) -> Void) {
         guard let token = Auth(req: req).getAccessToken() else {
             fatalError("RsourceRequest: Could not retrieve AccessToken")
         }
@@ -150,8 +146,7 @@ extension ResourceRequest {
     
     
     
-    func delete(on container: Container, completion: @escaping (GetResourceRequestStatus<Int>) -> Void) {
-        guard let req = container as? Request else { fatalError() }
+    func delete(_ req: Request, completion: @escaping (GetResourceRequestStatus<Int>) -> Void) {
         guard let token = Auth(req: req).getAccessToken() else {
             fatalError("RsourceRequest: Could not retrieve AccessToken")
         }

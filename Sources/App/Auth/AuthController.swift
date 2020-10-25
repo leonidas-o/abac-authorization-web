@@ -1,70 +1,79 @@
 import Vapor
-import Crypto
+
 
 struct AuthController: RouteCollection {
-    
-    private let userStore: UserPersistenceStore
-    private let cache: CacheStore
     
     enum Constant {
         static let accessTokenCount = 32
         static let accessTokenExpirationDefault = 60*60*24*3 //s-m-h-d
     }
-
-    init(userStore: UserPersistenceStore, cache: CacheStore) {
-        self.userStore = userStore
-        self.cache = cache
-    }
     
     
+    let cache: CacheRepo
     
-    func boot(router: Router) throws {
-        let authGroup = router.grouped("auth")
-        
-        authGroup.post(APIAuthenticateData.self, at: "authenticate", use: authenticate)
-        
-        let basicAuthMiddleware = User.basicAuthMiddleware(using: BCryptDigest())
-        let basicAuthGroup = authGroup.grouped(basicAuthMiddleware)
-        basicAuthGroup.post("login", use: loginHandler)
-        
-        let tokenAuthMiddleware = User.tokenAuthMiddleware()
-        let guardAuthMiddleware = User.guardAuthMiddleware()
-        let tokenAuthGroup = authGroup.grouped(tokenAuthMiddleware, guardAuthMiddleware)
-        tokenAuthGroup.post("logout", use: logoutHandler)
+    
+    func boot(routes: RoutesBuilder) throws {
+        // API
+        let bearerAuthenticator = UserModelBearerAuthenticator()
+        let guardMiddleware = UserModel.guardMiddleware()
+        let authRoute = routes.grouped("\(APIResource.Resource.auth.rawValue)")
+        // Auth Route
+        // public
+        authRoute.post("\(APIResource.Resource.accessData.rawValue)", use: authenticate)
+        // basic authentication
+        let bGroup = authRoute.grouped(UserModelBasicAuthenticator())
+        bGroup.post("\(APIResource.Resource.login.rawValue)", use: loginHandler)
+        // token authentication
+        let gGroup = authRoute.grouped(bearerAuthenticator, guardMiddleware)
+        gGroup.post("\(APIResource.Resource.logout.rawValue)", use: logoutHandler)
     }
 
     
     
+    // MARK: - public
     
-    func loginHandler(_ req: Request) throws -> Future<APITokensResponse> {
-        let user = try req.requireAuthenticated(User.self)
+    // MARK: session based backend service only
+    // (UserAuthSessionsMiddleware)
+    func authenticate(_ req: Request) throws -> EventLoopFuture<User.Public> {
+        let data = try req.content.decode(AuthenticateData.self)
+        return req.cacheRepo.get(key: data.token, as: AccessData.self).unwrap(or: Abort(.unauthorized)).flatMapThrowing { accessData in
+            return accessData.userData.user.convertToUserPublic()
+        }
+    }
+
+    
+    
+    // MARK: - basic authentication
+    
+    func loginHandler(_ req: Request) throws -> EventLoopFuture<TokensResponse> {
+        let user = try req.auth.require(UserModel.self)
         
-        return userStore.getAllRoles(from: user).flatMap{ userRoles in
-            let userData = UserData(user: user, roles: userRoles.source)
-            return try self.generateNewAccessToken(with: userData).map{ accessToken in
-                return APITokensResponse(accessData: accessToken)
+        return req.userRepo.getAllRoles(user)
+            .and(getActiveAccessToken(req, for: user)).flatMap { userRoles, activeAccessToken in
+            
+            user.cachedAccessToken = activeAccessToken?.token
+            let userData = UserData(user: user.convertToUser(),
+                                    roles: userRoles.map { $0.convertToRole() })
+            return saveNewAccessData(req, userData: userData).map { accessData in
+                return TokensResponse(accessData: accessData.convertToAccessDataPublic())
             }
         }
         
     }
-        
-    func logoutHandler(_ req: Request) throws -> Future<HTTPStatus> {
-        guard let accessToken = req.http.headers.bearerAuthorization else {
+    
+    
+    
+    // MARK: - token authentication
+    
+    
+    func logoutHandler(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        guard let accessToken = req.headers.bearerAuthorization else {
             throw Abort(HTTPResponseStatus.internalServerError)
         }
         return cache.delete(key: accessToken.token).transform(to: .noContent)
     }
     
     
-    // MARK: Only for session based backend services (e.g. UserAuthSessionsMiddleware)
-    func authenticate(_ req: Request, data: APIAuthenticateData) throws -> Future<User.Public> {
-        return cache.get(key: data.token, as: AccessData.self).map(to: User.Public.self) { token in
-            guard let token = token else {
-                throw Abort(.unauthorized)
-            }
-            return token.userData.user.convertToPublic()
-        }
-    }
 
 }
 
@@ -73,12 +82,30 @@ struct AuthController: RouteCollection {
 
 // MARK: - Private helper methods
 extension AuthController {
+    private func getActiveAccessToken(_ req: Request, for user: UserModel) -> EventLoopFuture<AccessData?> {
+        if let cachedAccessToken = user.cachedAccessToken, !cachedAccessToken.isEmpty  {
+            return req.cacheRepo.getExistingKeys(using: [cachedAccessToken], as: [AccessData].self).map { array in
+                return array.first
+            }
+        } else {
+            return req.eventLoop.makeSucceededFuture(nil)
+        }
+    }
     
-    private func generateNewAccessToken(with userData: UserData, expires expirationTime: Int = Constant.accessTokenExpirationDefault) throws -> Future<AccessData> {
-        let newToken = try AccessData.generate(withTokenCount: Constant.accessTokenCount, for: userData)
-        return cache.save(key: newToken.token, to: newToken).then{  _ -> Future<Int> in
-            return self.cache.setExpiration(forKey: newToken.token, afterSeconds: expirationTime)
-        }.transform(to: newToken)
+    private func saveNewAccessData(_ req: Request, userData: UserData, expires expirationTime: Int = Constant.accessTokenExpirationDefault) -> EventLoopFuture<AccessData> {
+        var newAccessData: AccessData
+        do {
+            newAccessData = try AccessData.generate(withTokenCount: Constant.accessTokenCount, for: userData)
+        } catch {
+            return req.eventLoop.makeFailedFuture(error)
+        }
+        return req.userRepo.updateUser(fromUserData: newAccessData.userData).flatMap { savedUser in
+            newAccessData.userData.user = savedUser.convertToUser()
+            newAccessData = newAccessData.wipeOutUserPassword()
+            return req.cacheRepo.save(key: newAccessData.token, to: newAccessData).flatMap {
+                return req.cacheRepo.setExpiration(forKey: newAccessData.token, afterSeconds: expirationTime)
+            }.transform(to: newAccessData)
+        }
     }
     
 }

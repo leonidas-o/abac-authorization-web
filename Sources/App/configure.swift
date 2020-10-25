@@ -1,117 +1,124 @@
-import Authentication
-import FluentPostgreSQL
+import Fluent
 import Vapor
 import Redis
 import ABACAuthorization
 import Leaf
 
+
 /// Called before your application initializes.
-public func configure(_ config: inout Config, _ env: inout Environment, _ services: inout Services) throws {
-    // Register providers first
-    try services.register(FluentPostgreSQLProvider())
-    try services.register(AuthenticationProvider())
-    try services.register(LeafProvider())
-    try services.register(RedisProvider())
-
-    // Register Repositories
-    services.register(UserPostgreSQLStore.self)
-    services.register(RedisStore.self)
-    services.register(AuthorizationPolicyPostgreSQLStore.self)
-    services.register(RolePostgreSQLStore.self)
+public func configure(_ app: Application) throws {
     
-    // Register routes to the router
-    // Thread-safe controllers: https://github.com/vapor/vapor/issues/1711
-    services.register(Router.self) { container -> EngineRouter in
-        let router = EngineRouter.default()
-        try routes(router, container)
-        return router
-    }
+    // MARK: Repositories
     
-
-    // Register middleware
-    var middlewares = MiddlewareConfig() // Create _empty_ middleware config
-    middlewares.use(SessionsMiddleware.self) // Enables sessions.
-    middlewares.use(FileMiddleware.self) // Serves files from `Public/` directory
-    middlewares.use(ErrorMiddleware.self) // Catches errors and converts to HTTP response
-    services.register(middlewares)
-
-
-    // Configure a database
-    /// Register the configured database to the database config.
-    var databases = DatabasesConfig()
-    let hostname = Environment.get("DATABASE_HOSTNAME") ?? "localhost"
+    app.userRepoFactory.use { req in UserPostgreSQLRepo(db: req.db) }
+    app.userRepoFactory.useForApp { app in UserPostgreSQLRepo(db: app.db) }
+    app.roleRepoFactory.use { req in RolePostgreSQLRepo(db: req.db) }
+    app.roleRepoFactory.useForApp { app in RolePostgreSQLRepo(db: app.db) }
+    // ABACAuthorization
+    app.abacAuthorizationRepoFactory.use { req in ABACAuthorizationPostgreSQLRepo(db: req.db) }
+    app.abacAuthorizationRepoFactory.useForApp { app in ABACAuthorizationPostgreSQLRepo(db: app.db) }
+    // specify what repository will be created by cacheRepoFactory
+    app.cacheRepoFactory.use { req in RedisRepo(client: req.redis) }
+    app.cacheRepoFactory.useForApp { app in RedisRepo(client: app.redis) }
+    
+    
+    
+    // MARK: PostgreSQL
+    
+    let databaseHostname = Environment.get("DATABASE_HOSTNAME") ?? "localhost"
     let databaseName: String
     let databasePort: Int
-    if (env == .testing) {
-        databaseName = "abacauthweb-test"
-        
-        if let testPort = Environment.get("DATABASE_PORT") {
+    if (app.environment == .testing) {
+        databaseName = Environment.get("DATABASE_NAME_TEST") ?? "abacauthweb-test"
+        if let testPort = Environment.get("DATABASE_PORT_TEST") {
             databasePort = Int(testPort) ?? 5433
         } else {
             databasePort = 5433
         }
-        
     } else {
-        databaseName = "abacauthweb"
-        databasePort = 5432
+        databaseName = Environment.get("DATABASE_NAME") ?? "abacauthweb"
+        if let port = Environment.get("DATABASE_PORT") {
+            databasePort = Int(port) ?? 5432
+        } else {
+            databasePort = 5432
+        }
     }
-    let databaseConfig = PostgreSQLDatabaseConfig(
-        hostname: hostname,
-        port: databasePort,
-        username: "abacauthweb",
-        database: databaseName,
-        password: "abac12345")
-    let database = PostgreSQLDatabase(config: databaseConfig)
-    databases.add(database: database, as: .psql)
+    let databaseUsername = Environment.get("DATABASE_USERNAME") ?? "abacauthweb"
+    let databasePassword = Environment.get("DATABASE_PASSWORD") ?? "abac12345"
+    app.databases.use(.postgres(hostname: databaseHostname,
+                                port: databasePort,
+                                username: databaseUsername,
+                                password: databasePassword,
+                                database: databaseName), as: .psql)
     
-    // Redis
-    var redisConfig = RedisClientConfig()
+    // Model lifecycle events
+    app.databases.middleware.use(ABACAuthorizationPolicyModelMiddleware())
+    app.databases.middleware.use(ABACConditionModelMiddleware())
+    
+    
+    
+    // MARK: Redis
+    
+    let redisHostname = Environment.get("REDIS_HOSTNAME") ?? "localhost"
     let redisPort: Int
-    if (env == .testing) {
+    if (app.environment == .testing) {
         redisPort = 6380
     } else {
         redisPort = 6379
     }
-    redisConfig.hostname = Environment.get("REDIS_HOSTNAME") ?? "localhost"
-    redisConfig.port = redisPort
-    let redis = try RedisDatabase(config: redisConfig)
-    databases.add(database: redis, as: .redis)
-
-    services.register(databases)
-
-    /// Configure migrations
-    var migrations = MigrationConfig()
-    // https://forums.swift.org/t/vapor-3-swift-5-2-regression/34764
-    migrations.add(model: User.self, database: DatabaseIdentifier<User.Database>.psql)
-    migrations.add(model: Role.self, database: DatabaseIdentifier<Role.Database>.psql)
-    migrations.add(model: UserRolePivot.self, database: DatabaseIdentifier<UserRolePivot.Database>.psql)
-    //migrations.add(model: UserToken.self, database: .psql)
-    migrations.add(model: Todo.self, database: DatabaseIdentifier<Todo.Database>.psql)
-    migrations.add(model: AuthorizationPolicy.self, database: DatabaseIdentifier<AuthorizationPolicy.Database>.psql)
-    migrations.add(model: ConditionValueDB.self, database: DatabaseIdentifier<ConditionValueDB.Database>.psql)
-    // Migrations
-    migrations.add(migration: AdminUser.self, database: .psql)
-    migrations.add(migration: AdminRole.self, database: .psql)
-    if (env != .testing) {
-        migrations.add(migration: AdminAuthorizationPolicyRestricted.self, database: .psql)
-    }
-    services.register(migrations)
-
+    app.redis.configuration = try .init(hostname: redisHostname, port: redisPort)
     
-    var commandConfig = CommandConfig.default()
-    commandConfig.useFluentCommands()
-    services.register(commandConfig)
     
-    services.register(InMemoryAuthorizationPolicy.self)
     
-    config.prefer(LeafRenderer.self, for: ViewRenderer.self)
-    config.prefer(RedisCache.self, for: KeyedCache.self)
-}
+    // MARK: Sessions
+    
+    app.sessions.use(.redis)
+    app.sessions.configuration.cookieName = "gaintrain-session"
+    
+    
+    
+    // MARK: Middleware
+    
+    app.middleware.use(app.sessions.middleware)
+    app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
+    app.middleware.use(ErrorMiddleware.default(environment: app.environment))
+    
+    
+    
+    // MARK:  Model preparation
+    
+    app.migrations.add(UserModelMigration())
+    app.migrations.add(RoleModelMigration())
+    app.migrations.add(UserRolePivotMigration())
+    app.migrations.add(TodoModelMigration())
+    // ABACAuthorization
+    app.migrations.add(ABACAuthorizationPolicyModelMigration())
+    app.migrations.add(ABACConditionModelMigration())
+    
+    // data seeding
+    app.migrations.add(AdminUserMigration())
+    app.migrations.add(DefaultRolesMigration())
+    // ABACAuthorization
+//    if (app.environment != .testing) {
+        app.migrations.add(RestrictedABACAuthorizationPoliciesMigration())
+//    }
+    
+    
+    
+    // MARK: Leaf
 
-
-
-//MARK: - ServiceType conformance
-// connection pool for all stores
-extension Database {
-    public typealias ConnectionPool = DatabaseConnectionPool<ConfiguredDatabase<Self>>
+    app.views.use(.leaf)
+    app.leaf.cache.isEnabled = app.environment.isRelease
+    
+    
+    
+    // MARK: Routes
+    
+    try routes(app)
+    
+    
+    
+    // MARK: Boot
+    
+    try boot(app)
 }

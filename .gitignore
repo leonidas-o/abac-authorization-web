@@ -80,11 +80,12 @@ playground.xcworkspace
 # Add this line if you want to avoid checking in source code from Swift Package Manager dependencies.
 # Packages/
 # Package.pins
-# Package.resolved
+Package.resolved
 .build/
 # Add this line if you want to avoid checking in Xcode SPM integration.
 # .swiftpm/xcode
 .swiftpm/xcode/xcuserdata
+.swiftpm/xcode/xcshareddata
 .swiftpm/xcode/package.xcworkspace/xcuserdata
 
 # CocoaPods
@@ -165,5 +166,5 @@ $RECYCLE.BIN/
 
 ### General ###
 Dockerfile
-docker-compose.yml
+#docker-compose.yml
 

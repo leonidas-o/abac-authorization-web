@@ -1,87 +1,58 @@
-import Authentication
-import FluentPostgreSQL
 import Vapor
+import Foundation
 
-protocol UserDefinition {
-    var id: UUID? { get set }
-    var name: String { get set }
-    var email: String { get set }
-    var password: String { get set }
+
+struct User: Codable {
     
-    func convertToPublic() -> User.Public
-}
-
-final class User: PostgreSQLUUIDModel {
     var id: UUID?
     var name: String
     var email: String
     var password: String
-
-    init(id: UUID? = nil, name: String, email: String, passwordHash: String) {
+    var cachedAccessToken: String?
+    
+    
+    init(id: UUID? = nil,
+                name: String,
+                email: String,
+                password: String,
+                cachedAccessToken: String? = nil) {
         self.id = id
         self.name = name
         self.email = email
-        self.password = passwordHash
+        self.password = password
+        self.cachedAccessToken = cachedAccessToken
     }
     
-    final class Public: Codable {
-
+    
+    struct Public: Codable {
         var id: UUID?
         var name: String
         var email: String
-
-        init(id: UUID? = nil, name: String, email: String) {
+        
+        
+        init(id: UUID? = nil,
+                    name: String,
+                    email: String) {
             self.id = id
             self.name = name
             self.email = email
         }
     }
-    
 }
 
 
-extension User: BasicAuthenticatable {
-    static var usernameKey: UsernameKey = \User.email
-    static var passwordKey: PasswordKey = \User.password
-}
 
-/// Allows users to be verified by bearer / token auth middleware.
-extension User: TokenAuthenticatable {
-    /// See `TokenAuthenticatable`.
-    typealias TokenType = AccessData
-    
-    static func authenticate(token: AccessData, on connection: DatabaseConnectable) -> EventLoopFuture<User?> {
-        return connection.future(token.userData.user)
-    }
-}
+// MARK: - General conformace
 
-/// Allows `User` to be used as a Fluent migration.
-extension User: Migration {
-    /// See `Migration`.
-    static func prepare(on conn: PostgreSQLConnection) -> Future<Void> {
-        return PostgreSQLDatabase.create(User.self, on: conn) { builder in
-            builder.field(for: \.id, isIdentifier: true)
-            builder.field(for: \.name)
-            builder.field(for: \.email)
-            builder.field(for: \.password)
-            builder.unique(on: \.email)
-        }
-    }
-}
+extension User.Public: Content {}
+extension User.Public: Authenticatable {}
 
-/// Allows `User` to be encoded to and decoded from HTTP messages.
-extension User: Content {}
 
-/// Allows `User` to be used as a dynamic parameter in route definitions.
-extension User: Parameter {}
 
-extension User: UserDefinition {}
+// MARK: - General conversion
 
 extension User {
-    func convertToPublic() -> User.Public {
+    func convertToUserPublic() -> User.Public {
         return User.Public(id: id, name: name, email: email)
     }
 }
-
-
-extension User: SessionAuthenticatable {}

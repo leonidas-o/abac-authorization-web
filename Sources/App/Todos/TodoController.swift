@@ -1,49 +1,46 @@
 import Vapor
+import Fluent
 import ABACAuthorization
-import FluentPostgreSQL
+
 
 /// Simple todo-list controller.
-final class TodoController: RouteCollection {
+struct TodoController: RouteCollection {
     
-    private let cache: CacheStore
-    private let apiResource: ABACAPIResourceable
-    
-    init(cache: CacheStore) {
-        self.cache = cache
-        self.apiResource = APIResource()
-    }
+    let cache: CacheRepo
     
     
-    func boot(router: Router) throws {
-        // API
-        let mainRoute = router.grouped(APIResource._apiEntry, APIResource.Resource.todos.rawValue)
+    func boot(routes: RoutesBuilder) throws {
+        let bearerAuthenticator = UserModelBearerAuthenticator()
+        let guardMiddleware = UserModel.guardMiddleware()
+        let abacMiddleware = ABACMiddleware<AccessData>(cache: cache, protectedResources: APIResource._allProtected)
         
-        let tokenAuthMiddleware = User.tokenAuthMiddleware()
-        let guardAuthMiddleware = User.guardAuthMiddleware()
-        let abacMiddleware = ABACMiddleware<AccessData>(cache: cache, apiResource: apiResource)
-        let tgaGroup = mainRoute.grouped(tokenAuthMiddleware, guardAuthMiddleware, abacMiddleware)
+        // API
+        let mainRoute = routes.grouped("\(APIResource._apiEntry)", "\(APIResource.Resource.todos.rawValue)")
+        
+        
+        let tgaGroup = mainRoute.grouped(bearerAuthenticator, guardMiddleware, abacMiddleware)
         
         tgaGroup.get(use: index)
         tgaGroup.post(use: create)
-        tgaGroup.delete(Todo.parameter, use: delete)
+        tgaGroup.delete(":todoId", use: delete)
         
         
         // FRONTEND
-        let todoRoute = router.grouped("todos")
+        let todoRoute = routes.grouped("todos")
         let authGroup = todoRoute.grouped(UserAuthSessionsMiddleware(apiUrl: APIConnection.url, redirectPath: "/login"))
         authGroup.get(use: overviewHandler)
         
         
-        // Same as other frontend crud routes
+        // if needed same as other frontend crud routes
         /*
         authGroup.get("create", use: createHandler)
-        authGroup.post(CreateTodoRequest.self, at: "create", use: createPostHandler)
+        authGroup.post("create", use: createPostHandler)
         
-        authGroup.post(CreateTodoRequest.self, at: "update", use: updatePostHandler)
-        authGroup.post(CreateTodoRequest.self, at: "update/confirm", use: updateConfirmPostHandler)
+        authGroup.post("update", use: updatePostHandler)
+        authGroup.post("update/confirm", use: updateConfirmPostHandler)
         
-        authGroup.post(CreateTodoRequest.self, at: "delete", use: deletePostHandler)
-        authGroup.post(CreateTodoRequest.self, at: "delete/confirm", use: deleteConfirmPostHandler)
+        authGroup.post("delete", use: deletePostHandler)
+        authGroup.post("delete/confirm", use: deleteConfirmPostHandler)
          */
     }
     
@@ -52,43 +49,50 @@ final class TodoController: RouteCollection {
     // MARK: - API
     
     /// Returns a list of all todos for the auth'd user.
-    func index(_ req: Request) throws -> Future<[Todo]> {
+    func index(_ req: Request) throws -> EventLoopFuture<[TodoModel]> {
         // fetch auth'd user
-        let user = try req.requireAuthenticated(User.self)
-        
+        let user = try req.auth.require(UserModel.self)
+        let userId = try user.requireID()
         // query all todo's belonging to user
-        return try Todo.query(on: req)
-            .filter(\.userID == user.requireID()).all()
+        return TodoModel.query(on: req.db)
+            .filter(\.$user.$id == userId).all()
     }
 
     /// Creates a new todo for the auth'd user.
-    func create(_ req: Request) throws -> Future<Todo> {
+    func create(_ req: Request) throws -> EventLoopFuture<TodoModel> {
         // fetch auth'd user
-        let user = try req.requireAuthenticated(User.self)
+        let user = try req.auth.require(UserModel.self)
         
         // decode request content
-        return try req.content.decode(CreateTodoRequest.self).flatMap { todo in
-            // save new todo
-            return try Todo(title: todo.title, userID: user.requireID())
-                .save(on: req)
-        }
+        let todo = try req.content.decode(CreateTodoRequest.self)
+        // save new todo
+        let todoModel = try TodoModel(title: todo.title, userId: user.requireID())
+        return todoModel.save(on: req.db)
+            .transform(to: todoModel)
     }
 
     /// Deletes an existing todo for the auth'd user.
-    func delete(_ req: Request) throws -> Future<HTTPStatus> {
+    func delete(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
         // fetch auth'd user
-        let user = try req.requireAuthenticated(User.self)
+        let user = try req.auth.require(UserModel.self)
         
         // decode request parameter (todos/:id)
-        return try req.parameters.next(Todo.self).flatMap { todo -> Future<Void> in
+        guard let todoId = req.parameters.get("todoId", as: Int.self) else {
+            throw Abort(.badRequest)
+        }
+        return TodoModel.query(on: req.db).filter(\.$id == todoId).first().unwrap(or: Abort(.badRequest)).flatMap { todo in
             // ensure the todo being deleted belongs to this user
-            guard try todo.userID == user.requireID() else {
-                throw Abort(.forbidden)
+            do {
+                guard try todo.$user.id == user.requireID() else {
+                    throw Abort(.forbidden)
+                }
+            } catch {
+                return req.eventLoop.makeFailedFuture(error)
             }
-            
             // delete model
-            return todo.delete(on: req)
-        }.transform(to: .ok)
+            return todo.delete(on: req.db)
+                .transform(to: .ok)
+        }
     }
     
     
@@ -98,16 +102,16 @@ final class TodoController: RouteCollection {
     
     // MARK: - FRONTEND
     
-    func overviewHandler(_ req: Request) throws -> Future<View> {
+    func overviewHandler(_ req: Request) throws -> EventLoopFuture<View> {
         let todoRequest = ResourceRequest<NoRequestType, [CreateTodoRequest]>(resourcePath: "/api/todos")
-        return todoRequest.futureGetAll(on: req).flatMap { apiResponse in
+        return todoRequest.futureGetAll(req).flatMap { apiResponse in
             let context = TodoOverviewContext(
                 title: "Todo's",
                 content: apiResponse,
                 formActionUpdate: "/todos/update",
                 formActionDelete: "/todos/delete",
                 error: req.query[String.self, at: "error"])
-            return try req.view().render("todo/todos", context)
+            return req.view.render("todo/todos", context)
         }
     }
     
@@ -116,6 +120,8 @@ final class TodoController: RouteCollection {
     
 }
 
+
+
 // MARK: Content
 
 /// Represents data required to create a new todo.
@@ -123,7 +129,6 @@ struct CreateTodoRequest: Content {
     /// Todo title.
     var title: String
 }
-
 
 
 

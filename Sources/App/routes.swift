@@ -2,30 +2,15 @@ import Crypto
 import Vapor
 
 /// Register your application's routes here.
-public func routes(_ router: Router, _ app: Container) throws {
+func routes(_ app: Application) throws {
     
-    let cacheStore = try app.make(RedisStore.self)
-    let userPersistenceStore = try app.make(UserPostgreSQLStore.self)
-    let rolePersistenceStore = try app.make(RolePostgreSQLStore.self)
-    let authPolicyPersistenceStore = try app.make(AuthorizationPolicyPersistenceStore.self)
-    
-
-    let authController = AuthController(userStore: userPersistenceStore, cache: cacheStore)
-    try router.register(collection: authController)
-    
-    let indexController = IndexController()
-    try router.register(collection: indexController)
-    
-    let usersController = UserController(store: userPersistenceStore, cache: cacheStore)
-    try router.register(collection: usersController)
-    
-    let rolesController = RolesController(store: rolePersistenceStore, cache: cacheStore)
-    try router.register(collection: rolesController)
-
-    let authPolicyController = AuthorizationPolicyController(authPolicyStore: authPolicyPersistenceStore, roleStore: rolePersistenceStore, cache: cacheStore)
-    try router.register(collection: authPolicyController)
-    
-    let todosController = TodoController(cache: cacheStore)
-    try router.register(collection: todosController)
-    
+    try app.register(collection: AuthController(cache: app.cacheRepo))
+    try app.register(collection: IndexController())
+    try app.register(collection: UserController(cache: app.cacheRepo))
+    try app.register(collection: RolesController(cache: app.cacheRepo))
+    try app.register(collection: TodoController(cache: app.cacheRepo))
+    // ABACAuthorization
+    try app.register(collection: ABACAuthorizationPolicyController(cache: app.cacheRepo))
+    // ABACConditionController not implemented yet
+//    try app.register(collection: ABACConditionController(cache: app.cacheRepo))
 }
