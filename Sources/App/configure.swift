@@ -73,7 +73,7 @@ public func configure(_ app: Application) throws {
     // MARK: Sessions
     
     app.sessions.use(.redis)
-    app.sessions.configuration.cookieName = "gaintrain-session"
+    app.sessions.configuration.cookieName = "abac-session"
     
     
     
