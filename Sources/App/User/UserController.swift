@@ -73,12 +73,12 @@ struct UserController: RouteCollection {
         
         authGroup.get(use: overviewHandlerFE)
         authGroup.post("update", use: updatePostHandlerFE)
-        authGroup.post("update/confirm", use: updateConfirmPostHandlerFE)
+        authGroup.post("update", "confirm", use: updateConfirmPostHandlerFE)
         authGroup.post("delete", use: deletePostHandlerFE)
-        authGroup.post("delete/confirm", use: deleteConfirmPostHandlerFE)
+        authGroup.post("delete", "confirm", use: deleteConfirmPostHandlerFE)
         // Relation
-        authGroup.get("role/add", use: addRoleHandlerFE)
-        authGroup.post("role/add", use: addRolePostHandlerFE)
+        authGroup.get("role", "add", use: addRoleHandlerFE)
+        authGroup.post("role", "add", use: addRolePostHandlerFE)
     }
     
     

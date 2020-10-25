@@ -23,16 +23,16 @@
             </div>
             
             <div class="form-group row">
-                <label for="action_on_resource_key" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Action-On-Resource Key</label>
+                <label for="action_key" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Action-On-Resource Key</label>
                 <div class="col-6 col-sm-8 col-md-8 col-lg-9">
-                    <input readonly type="text" name="actionKey" class="form-control" id="action_on_resource_key" value="#(authPolicy.actionKey)"/>
+                    <input readonly type="text" name="actionKey" class="form-control" id="action_key" value="#(authPolicy.actionKey)"/>
                 </div>
             </div>
             
             <div class="form-group row">
-                <label for="action_on_resource_value" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Action-On-Resource Value</label>
+                <label for="action_value" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Action-On-Resource Value</label>
                 <div class="col-6 col-sm-8 col-md-8 col-lg-9">
-                    <input readonly type="text" name="actionValue" class="form-control" id="action_on_resource_value" value="#(authPolicy.actionValue)"/>
+                    <input readonly type="text" name="actionValue" class="form-control" id="action_value" value="#(authPolicy.actionValue)"/>
                 </div>
             </div>
             

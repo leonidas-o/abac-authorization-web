@@ -32,15 +32,15 @@
                                 <form method="post" #if(formActionUpdate): action="#(formActionUpdate)" #endif class="d-inline mr-2">
                                     <input type="hidden" name="id" id="id" value="#(policy.id)"/>
                                     <input type="hidden" name="roleName" id="role_name" value="#(policy.roleName)"/>
-                                    <input type="hidden" name="actionKey" id="action_on_resource_key" value="#(policy.actionKey)"/>
-                                    <input type="hidden" name="actionValue" id="action_on_resource_value" value="#(policy.actionValue)"/>
+                                    <input type="hidden" name="actionKey" id="action_key" value="#(policy.actionKey)"/>
+                                    <input type="hidden" name="actionValue" id="action_value" value="#(policy.actionValue)"/>
                                     <button type="submit" class="btn btn-outline-primary btn-sm"><i class="fas fa-edit align-middle"></i></button>
                                 </form>
                                 <form method="post" #if(formActionDelete): action="#(formActionDelete)" #endif class="d-inline">
                                     <input type="hidden" name="id" id="id" value="#(policy.id)"/>
                                     <input type="hidden" name="roleName" id="role_name" value="#(policy.roleName)"/>
-                                    <input type="hidden" name="actionKey" id="action_on_resource_key" value="#(policy.actionKey)"/>
-                                    <input type="hidden" name="actionValue" id="action_on_resource_value" value="#(policy.actionValue)"/>
+                                    <input type="hidden" name="actionKey" id="action_key" value="#(policy.actionKey)"/>
+                                    <input type="hidden" name="actionValue" id="action_value" value="#(policy.actionValue)"/>
                                     <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fas fa-trash-alt align-middle"></i></button>
                                 </form>
                             <div>

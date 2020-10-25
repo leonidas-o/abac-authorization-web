@@ -42,10 +42,10 @@ struct ABACAuthorizationPolicyController: RouteCollection {
         authGroup.post("create", use: createPost)
         
         authGroup.post("update", use: updatePost)
-        authGroup.post("update/confirm", use: updateConfirmPost)
+        authGroup.post("update", "confirm", use: updateConfirmPost)
         
         authGroup.post("delete", use: deletePost)
-        authGroup.post("delete/confirm", use: deleteConfirmPost)
+        authGroup.post("delete", "confirm", use: deleteConfirmPost)
         
         // Relations
         authGroup.get("condition-value/create", use: createCondition)
@@ -329,10 +329,10 @@ struct ABACAuthorizationPolicyController: RouteCollection {
     
     func deleteConfirmPost(_ req: Request) throws -> EventLoopFuture<Response> {
         let authPolicy = try req.content.decode(ABACAuthorizationPolicy.self)
-        guard let uuid = authPolicy.id?.uuidString else {
+        guard let authPolicyId = authPolicy.id else {
             return req.eventLoop.makeSucceededFuture(req.redirect(to: "/authorization-policies?error=Delete failed: UUID corrupt"))
         }
-        let authPolicyRequest = ResourceRequest<NoRequestType, StatusCodeResponseType>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)/\(uuid)")
+        let authPolicyRequest = ResourceRequest<NoRequestType, StatusCodeResponseType>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)/\(authPolicyId)")
         return authPolicyRequest.fututeDelete(req).map { apiResponse in
             return req.redirect(to: "/authorization-policies")
             }.flatMapErrorThrowing { error in
