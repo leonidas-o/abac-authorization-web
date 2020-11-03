@@ -133,8 +133,11 @@ struct ABACAuthorizationPolicyController: RouteCollection {
         guard let policyId = req.parameters.get("policyId", as: ABACAuthorizationPolicyModel.IDValue.self) else {
             throw Abort(.badRequest)
         }
-        return req.abacAuthorizationRepo.delete(policyId)
-            .transform(to: .noContent)
+        // Fetch model to call delete on model because of
+        // https://github.com/vapor/fluent/issues/704
+        return req.abacAuthorizationRepo.get(policyId).unwrap(or: Abort(.noContent)).map { policy in
+            return req.abacAuthorizationRepo.delete(policy)
+        }.transform(to: .noContent)
     }
     
     
