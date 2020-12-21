@@ -64,15 +64,10 @@ struct ABACAuthorizationPolicyController: RouteCollection {
     // MARK: - API
     
     func apiGetAll(_ req: Request) throws -> EventLoopFuture<[ABACAuthorizationPolicy]> {
-        return req.abacAuthorizationRepo.getAllWithConditions().flatMapThrowing { policies in
+        return req.abacAuthorizationRepo.getAllWithConditions().map { policies in
             
-            return try policies.map { policy -> ABACAuthorizationPolicy in
-                let abacConditions = try policy.conditions.map { condition -> ABACCondition in
-                    guard let abacCondition = condition.convertToABACCondition() else {
-                        throw Abort(.internalServerError)
-                    }
-                    return abacCondition
-                }
+            return policies.map { policy -> ABACAuthorizationPolicy in
+                let abacConditions = policy.conditions.map { $0.convertToABACCondition() }
                 return ABACAuthorizationPolicy(id: policy.id,
                                                roleName: policy.roleName,
                                                actionKey: policy.actionKey,
@@ -87,14 +82,9 @@ struct ABACAuthorizationPolicyController: RouteCollection {
         guard let policyId = req.parameters.get("policyId", as: ABACAuthorizationPolicyModel.IDValue.self) else {
             throw Abort(.badRequest)
         }
-        return req.abacAuthorizationRepo.getWithConditions(policyId).unwrap(or: Abort(.badRequest)).flatMapThrowing { policy in
+        return req.abacAuthorizationRepo.getWithConditions(policyId).unwrap(or: Abort(.badRequest)).map { policy in
             var converted = policy.convertToABACAuthorizationPolicy()
-            converted.conditions = try policy.conditions.map {
-                guard let condition = $0.convertToABACCondition() else {
-                    throw Abort(.internalServerError)
-                }
-                return condition
-            }
+            converted.conditions = policy.conditions.map { $0.convertToABACCondition() }
             return converted
         }
     }
@@ -115,14 +105,9 @@ struct ABACAuthorizationPolicyController: RouteCollection {
         }
         let updatedAuthPolicy = try req.content.decode(ABACAuthorizationPolicy.self)
         return req.abacAuthorizationRepo.getWithConditions(policyId).unwrap(or: Abort(.badRequest)).flatMap { policy in
-            return req.abacAuthorizationRepo.update(policy, updatedPolicy: updatedAuthPolicy).flatMapThrowing {
+            return req.abacAuthorizationRepo.update(policy, updatedPolicy: updatedAuthPolicy).map {
                 var converted = policy.convertToABACAuthorizationPolicy()
-                converted.conditions = try policy.conditions.map {
-                    guard let condition = $0.convertToABACCondition() else {
-                        throw Abort(.internalServerError)
-                    }
-                    return condition
-                }
+                converted.conditions = policy.conditions.map { $0.convertToABACCondition() }
                 return converted
             }
         }
@@ -148,13 +133,8 @@ struct ABACAuthorizationPolicyController: RouteCollection {
         guard let policyId = req.parameters.get("policyId", as: ABACAuthorizationPolicyModel.IDValue.self) else {
             throw Abort(.badRequest)
         }
-        return req.abacAuthorizationRepo.getWithConditions(policyId).unwrap(or: Abort(.badRequest)).flatMapThrowing { policy in
-            return try policy.conditions.map {
-                guard let condition = $0.convertToABACCondition() else {
-                    throw Abort(.internalServerError)
-                }
-                return condition
-            }
+        return req.abacAuthorizationRepo.getWithConditions(policyId).unwrap(or: Abort(.badRequest)).map { policy in
+            return policy.conditions.map { $0.convertToABACCondition() }
         }
     }
     

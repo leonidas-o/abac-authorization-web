@@ -1,4 +1,5 @@
 import Fluent
+import FluentPostgresDriver
 import Vapor
 import Redis
 import ABACAuthorization
@@ -15,8 +16,8 @@ public func configure(_ app: Application) throws {
     app.roleRepoFactory.use { req in RolePostgreSQLRepo(db: req.db) }
     app.roleRepoFactory.useForApp { app in RolePostgreSQLRepo(db: app.db) }
     // ABACAuthorization
-    app.abacAuthorizationRepoFactory.use { req in ABACAuthorizationPostgreSQLRepo(db: req.db) }
-    app.abacAuthorizationRepoFactory.useForApp { app in ABACAuthorizationPostgreSQLRepo(db: app.db) }
+    app.abacAuthorizationRepoFactory.use { req in ABACAuthorizationFluentRepo(db: req.db) }
+    app.abacAuthorizationRepoFactory.useForApp { app in ABACAuthorizationFluentRepo(db: app.db) }
     // specify what repository will be created by cacheRepoFactory
     app.cacheRepoFactory.use { req in RedisRepo(client: req.redis) }
     app.cacheRepoFactory.useForApp { app in RedisRepo(client: app.redis) }
@@ -102,7 +103,7 @@ public func configure(_ app: Application) throws {
 //    if (app.environment != .testing) {
         app.migrations.add(RestrictedABACAuthorizationPoliciesMigration())
 //    }
-    
+    try app.autoMigrate().wait()
     
     
     // MARK: Leaf
