@@ -2,7 +2,6 @@ import Vapor
 import Fluent
 import ABACAuthorization
 
-
 struct RestrictedABACAuthorizationPoliciesMigration: Migration {
     
     let readAuthPolicies = "\(ABACAPIAction.read)\(APIResource.Resource.abacAuthPolicies.rawValue)"
@@ -10,10 +9,11 @@ struct RestrictedABACAuthorizationPoliciesMigration: Migration {
     let readRoles = "\(ABACAPIAction.read)\(APIResource.Resource.roles.rawValue)"
     let readAuths = "\(ABACAPIAction.read)\(APIResource.Resource.auth.rawValue)"
     
+    let updateAuthPolicyServiceActionOnResource = "\(ABACAPIAction.create)\(APIResource.Resource.abacAuthPoliciesService.rawValue)"
     
     func prepare(on database: Database) -> EventLoopFuture<Void> {
-        RoleModel.query(on: database).first().unwrap(or: Abort(.internalServerError)).flatMap { role in
-            
+        // Admin
+        RoleModel.query(on: database).filter(\.$name == DefaultRolesMigration.DefaultRole.admin.rawValue).first().unwrap(or: Abort(.internalServerError)).flatMap { role in
             let readAuthPolicy = ABACAuthorizationPolicyModel(
                 roleName: role.name,
                 actionKey: readAuthPolicies,
@@ -42,12 +42,25 @@ struct RestrictedABACAuthorizationPoliciesMigration: Migration {
                 readAuth.save(on: database)
             ]
             return policySaveResults.flatten(on: database.eventLoop)
+        }.flatMap {
+            // SystemBot
+            return RoleModel.query(on: database).filter(\.$name == DefaultRolesMigration.DefaultRole.systemBot.rawValue).first().unwrap(or: Abort(.internalServerError)).flatMap { role in
+                let updateAuthPolicy = ABACAuthorizationPolicyModel(
+                    roleName: role.name,
+                    actionKey: updateAuthPolicyServiceActionOnResource,
+                    actionValue: true)
+                let policySaveResults: [EventLoopFuture<Void>] = [
+                    updateAuthPolicy.save(on: database)
+                ]
+                return policySaveResults.flatten(on: database.eventLoop)
+            }
         }
     }
     
+    
     func revert(on database: Database) -> EventLoopFuture<Void> {
-        RoleModel.query(on: database).first().unwrap(or: Abort(.internalServerError)).flatMap { role in
-            
+        // Admin
+        RoleModel.query(on: database).filter(\.$name == DefaultRolesMigration.DefaultRole.admin.rawValue).first().unwrap(or: Abort(.internalServerError)).flatMap { role in
             let deleteResults = [
                 ABACAuthorizationPolicyModel.query(on: database)
                     .filter(\.$roleName == role.name)
@@ -67,6 +80,17 @@ struct RestrictedABACAuthorizationPoliciesMigration: Migration {
                     .delete(),
             ]
             return deleteResults.flatten(on: database.eventLoop)
+        }.flatMap {
+            // SystemBot
+            RoleModel.query(on: database).filter(\.$name == DefaultRolesMigration.DefaultRole.systemBot.rawValue).first().unwrap(or: Abort(.internalServerError)).flatMap { role in
+                let deleteResults = [
+                    ABACAuthorizationPolicyModel.query(on: database)
+                        .filter(\.$roleName == role.name)
+                        .filter(\.$actionKey == updateAuthPolicyServiceActionOnResource)
+                        .delete(),
+                ]
+                return deleteResults.flatten(on: database.eventLoop)
+            }
         }
     }
 }

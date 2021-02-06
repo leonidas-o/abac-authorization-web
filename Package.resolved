@@ -83,6 +83,15 @@
         }
       },
       {
+        "package": "DNSClient",
+        "repositoryURL": "https://github.com/OpenKitten/NioDNS.git",
+        "state": {
+          "branch": null,
+          "revision": "7517b774d48833f04869fcde668d2f338fadc464",
+          "version": "2.0.6"
+        }
+      },
+      {
         "package": "postgres-kit",
         "repositoryURL": "https://github.com/vapor/postgres-kit.git",
         "state": {

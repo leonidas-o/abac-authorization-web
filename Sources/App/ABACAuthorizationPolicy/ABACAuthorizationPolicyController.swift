@@ -1,7 +1,7 @@
 import Vapor
 import Foundation
 import ABACAuthorization
-
+import DNSClient
 
 struct ABACAuthorizationPolicyController: RouteCollection {
     
@@ -28,7 +28,7 @@ struct ABACAuthorizationPolicyController: RouteCollection {
         // Relations
         gaGroup.get(":policyId", "\(APIResource.Resource.abacConditions.rawValue)", use: apiGetAllRelatedConditions)
         // Re-create in-memory policies
-        gaGroup.put("\(APIResource.Resource.abacAuthPoliciesService.rawValue)", use: _recreateAllInMempryPolocies)
+        gaGroup.put("\(APIResource.Resource.abacAuthPoliciesService.rawValue)", use: _recreateAllInMemoryPolicies)
         // Bulk
         gaGroupBulk.post(use: apiCreateBulk)
         
@@ -142,13 +142,79 @@ struct ABACAuthorizationPolicyController: RouteCollection {
     
     // MARK: ABACAuthorizationPolicyService
     
-    func _recreateAllInMempryPolocies(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
-        return req.abacAuthorizationRepo.getAllWithConditions().flatMapThrowing { policies in
-            for policy in policies {
-                try req.abacAuthorizationPolicyService.addToInMemoryCollection(policy: policy, conditions: policy.conditions)
+    func _recreateAllInMemoryPolicies(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        if let address = req.query[String.self, at: "\(APIResource.UrlQuery.address.rawValue)"] {
+            return triggerRecreationForAllInstances(req, address: address)
+        } else {
+            return req.abacAuthorizationRepo.getAllWithConditions().flatMapThrowing { policies in
+                for policy in policies {
+                    try req.abacAuthorizationPolicyService.addToInMemoryCollection(policy: policy, conditions: policy.conditions)
+                }
+                return .noContent
             }
-            return .noContent
         }
+    }
+    
+    struct DNSClientKey: StorageKey {
+        typealias Value = DNSClient
+    }
+    
+    private func triggerRecreationForAllInstances(_ req: Request, address: String) -> EventLoopFuture<HTTPStatus> {
+        
+        return DNSClient.connect(on: req.eventLoop).flatMap { client in
+            req.storage.set(DNSClientKey.self, to: client)
+            return client.sendQuery(forHost: address, type: .a).flatMap { records in
+                
+                // reset system-bot password and cache it
+                let random = [UInt8].random(count: SystemBotUserMigration.Constant.passwordLength).base64
+                let password = try? Bcrypt.hash(random)
+                guard let hashedPassword = password else {
+                    return req.eventLoop.makeFailedFuture(Abort(.internalServerError))
+                }
+                return req.userRepo.get(byEmail: SystemBotUserMigration.Constant.email).unwrap(or: Abort(.internalServerError)).flatMap { botUser in
+                    botUser.password = hashedPassword
+                    return req.userRepo.save(botUser)
+                        .transform(to: botUser)
+                }.flatMap { botUser in
+                    return login(req, user: botUser, password: random)
+                }.flatMap { headers in
+                    return send(req, onRecords: records, headers: headers)
+                }
+            }
+        }
+    }
+    
+    private func login(_ req: Request, user: UserModel, password: String) -> EventLoopFuture<HTTPHeaders> {
+        let authUri = "/\(APIResource.Resource.auth.rawValue)/"
+        var headers: HTTPHeaders = .init()
+        let credentials = BasicAuthorization(username: user.email, password: password)
+        var basicHeaders = HTTPHeaders()
+        basicHeaders.basicAuthorization = credentials
+        
+        var apiTokens: TokensResponse? = nil
+        return req.client.post(URI(string: authUri), headers: basicHeaders).flatMap { res in
+            do {
+                apiTokens = try res.content.decode(TokensResponse.self)
+            } catch {
+                return req.eventLoop.makeFailedFuture(Abort(.internalServerError))
+            }
+            headers.add(name: .authorization, value: "Bearer \(apiTokens!.accessData.token)")
+            return req.eventLoop.makeSucceededFuture(headers)
+        }
+    }
+    
+    private func send(_ req: Request, onRecords records: Message, headers: HTTPHeaders) -> EventLoopFuture<HTTPStatus> {
+        var result: [EventLoopFuture<ClientResponse>] = []
+        for record in records.answers {
+            switch record {
+            case .a(let resourceRecord):
+                result.append(req.client.put(URI(string:"\(resourceRecord.resource.stringAddress):\(APIConnection.port)/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)/\(APIResource.Resource.abacAuthPoliciesService.rawValue)"), headers: headers))
+            default:
+                continue // do nothing
+            }
+        }
+        return result.flatten(on: req.eventLoop)
+            .transform(to: .noContent)
     }
     
     

@@ -9,6 +9,12 @@ import Leaf
 /// Called before your application initializes.
 public func configure(_ app: Application) throws {
     
+    // MARK: NIO HTTP Server
+    
+    app.http.server.configuration.port = APIConnection.port
+    
+    
+    
     // MARK: Repositories
     
     app.userRepoFactory.use { req in UserPostgreSQLRepo(db: req.db) }
@@ -98,6 +104,7 @@ public func configure(_ app: Application) throws {
     
     // data seeding
     app.migrations.add(AdminUserMigration())
+    app.migrations.add(SystemBotUserMigration())
     app.migrations.add(DefaultRolesMigration())
     // ABACAuthorization
 //    if (app.environment != .testing) {
@@ -119,7 +126,7 @@ public func configure(_ app: Application) throws {
     
     
     
-    // MARK: Boot
+    // MARK: Lifecycle Handler
     
-    try boot(app)
+    app.lifecycle.use(Prepare())
 }

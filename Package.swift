@@ -15,7 +15,8 @@ let package = Package(
         .package(url: "https://github.com/vapor/fluent-postgres-driver.git", from: "2.0.0"),
         .package(url: "https://github.com/vapor/leaf.git", from: "4.0.0-rc.1.4"),
         .package(url: "https://github.com/vapor/redis.git", from: "4.0.0-beta.5"),
-        .package(url: "https://github.com/leonidas-o/abac-authorization.git", .branch("master"))
+        .package(url: "https://github.com/leonidas-o/abac-authorization.git", .branch("master")),
+        .package(name: "DNSClient", url: "https://github.com/OpenKitten/NioDNS.git", from: "2.0.0"),
     ],
     targets: [
         .target(name: "App", dependencies: [
@@ -25,6 +26,7 @@ let package = Package(
             .product(name: "Redis", package: "redis"),
             .product(name: "ABACAuthorization", package: "abac-authorization"),
             .product(name: "Leaf", package: "leaf"),
+            .product(name: "DNSClient", package: "DNSClient")
             ],
             swiftSettings: [
                 // Enable better optimizations when building in Release configuration. Despite the use of

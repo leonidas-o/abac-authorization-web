@@ -51,6 +51,20 @@ Pretty straight forward, that would only grant access if the users name is equal
 See `UserController` routes -> Internal vs External routes. All the internal routes make use of ABACAuthorization where you need such a system. External routes like all "MyUser" routes, don't need such an authorization as a user is allowed to change his own data.
 
 
+
+## Horizontal scaling
+
+> This approach is mostly made with Kubernetes' headless service in mind, you can modify your  `_recreateAllInMemoryPolicies` route handler to fit your needs. For example injecting an array with all api instances etc.
+
+To achieve a fast decision making process for the evaluation if a request should be permitted or denied, all ABAC policies are stored in memory. This approach leads to some extra work to keep all instances, their in-memory policies, in sync.   
+See the `ABACAuthorizationPolicyController`, there is a route handler called `_recreateAllInMemoryPolicies`, which can be requested with an `address` url query or without.
+If you leave it out, the api will simply recreate all its in memory policies with the data from the configured database. 
+In a dynamic environemt like a kubernetes cluster, where you api instances can be re-created and deployed on different nodes at any time (IP addresses can change), you need a mechanism to address each api instance. A `nslookup` on a kubernetes headless service, gives you all ip addresses of your running api instances.
+To execute such a lookup using swift, we make us of OpenKitten's DNSClient (https://github.com/OpenKitten/NioDNS.git). Afterwards, we iterate over the array with addresses and request each instances `_recreateAllInMemoryPolicies` without an `address` url query, so it recreates its in-memory policies.
+As this is a proteted route, we have to first login the SystemBot user and use its token to send the update request to all api instances.
+
+
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE.md file for details.

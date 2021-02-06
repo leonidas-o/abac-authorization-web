@@ -1,17 +1,16 @@
 import Vapor
 import Fluent
 
-struct AdminUserMigration: Migration {
+struct SystemBotUserMigration: Migration {
     
     enum Constant {
-        static let name = "Admin"
-        static let email = "webmaster@foo.com"
+        static let name = "SystemBot"
+        static let email = "systembot@foo.com"
         static let passwordLength = 16
     }
     
     func prepare(on database: Database) -> EventLoopFuture<Void> {
         let random = [UInt8].random(count: Constant.passwordLength).base64
-        print("\nPASSWORD: \(random)")
         let password = try? Bcrypt.hash(random)
         guard let hashedPassword = password else {
             fatalError("Failed to create admin user")

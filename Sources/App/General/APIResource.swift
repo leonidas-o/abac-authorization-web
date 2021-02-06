@@ -1,11 +1,8 @@
 import Foundation
 
-
 struct APIResource {
     
     static let _apiEntry: String = "api"
-    
-    
     static let _all: [String] = Resource.allCases.map { $0.rawValue }.sorted { $0 < $1 }
     
     
@@ -17,6 +14,7 @@ struct APIResource {
         APIResource.Resource.roles,
         // ABACAuthorization
         APIResource.Resource.abacAuthPolicies,
+        APIResource.Resource.abacAuthPoliciesService,
         APIResource.Resource.abacConditions,
         
     ].map { $0.rawValue }.sorted { $0 < $1 }
@@ -37,6 +35,10 @@ struct APIResource {
         case users = "users"
         case myUser = "my-user"
         case roles = "roles"
+    }
+    
+    enum UrlQuery: String, CaseIterable {
+        case address = "address"
     }
     
 }
