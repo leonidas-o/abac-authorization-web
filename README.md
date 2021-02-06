@@ -59,9 +59,10 @@ See `UserController` routes -> Internal vs External routes. All the internal rou
 To achieve a fast decision making process for the evaluation if a request should be permitted or denied, all ABAC policies are stored in memory. This approach leads to some extra work to keep all instances, their in-memory policies, in sync.   
 See the `ABACAuthorizationPolicyController`, there is a route handler called `_recreateAllInMemoryPolicies`, which can be requested with an `address` url query or without.
 If you leave it out, the api will simply recreate all its in memory policies with the data from the configured database. 
-In a dynamic environemt like a kubernetes cluster, where you api instances can be re-created and deployed on different nodes at any time (IP addresses can change), you need a mechanism to address each api instance. A `nslookup` on a kubernetes headless service, gives you all ip addresses of your running api instances.
+In a dynamic environment like a Kubernetes cluster, where you api instances can be re-created and deployed on different nodes at any time (IP addresses can change), you need a mechanism to address each api instance. A `nslookup` on a Kubernetes headless service, gives you all ip addresses of your running api instances.
 To execute such a lookup using swift, we make us of OpenKitten's DNSClient (https://github.com/OpenKitten/NioDNS.git). Afterwards, we iterate over the array with addresses and request each instances `_recreateAllInMemoryPolicies` without an `address` url query, so it recreates its in-memory policies.
-As this is a proteted route, we have to first login the SystemBot user and use its token to send the update request to all api instances.
+As this is a protected route, we have to first login the SystemBot user and use its token to send the update request to all instances.
+
 
 
 
