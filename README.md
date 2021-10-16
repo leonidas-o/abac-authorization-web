@@ -6,6 +6,9 @@ The demo uses Postgres, Fluent and Redis. Using PostgreSQL and Redis is not mand
 You don't have to structure your own project like this to utilize the ABACAuthorization package. You can use it for your separate API and separate backend projects as well as your all-in-one project generated out of the default vapor web template.
 This demo-project (brought together under one hood out of two projects - api and backend) shows how a separate API and backend approach could work.
 Detailed instructions how to use ABACAuthorization package can be found in the package's README file.
+Http Port can be set via `HTTP_PORT` Environment variable, if not set, it defaults to 8080.
+
+> IMPORTANT: At the beginning, the most routes will throw a 403: Forbidden. This is expected, as the default `Auth Policies` are only providing minimal access (see Auth Policies section).
 
 
 ## Login
@@ -18,11 +21,11 @@ and the random generated password from console.
 ## Background info
 `ABACMiddleware` is used for securing the API.
 For backend services where sessions are used, you need e.g. a `UserAuthSessionsMiddleware`. It's basically a simple AuthSessionsMiddleware + RedirectMiddleware with a little bit of logic for access tokens. 
-That means if you access the api directly via a rest, ios etc. clients, you don't need a `UserAuthSessionsMiddleware`. You also don't need the policy creation gui etc. if you examine the `ABACAuthorizationPolicyController` you will find a bulk api endpoint which you can use, OR you can feed the database directly OR build your own policy creation gui etc.
-Models with the `...Model` suffix are pure Vapor models and reference types. There can be Data-Transfer-Objects, these are structs, value types, and are used for transfering data between the API and clients. This DTO's can be shared across projects (e.g. Vapor API and iOS client) using a seprate swift package.
+That means if you access the api directly via a rest, iOS etc. clients, you don't need a `UserAuthSessionsMiddleware`. You also don't need the policy creation GUI etc. if you examine the `ABACAuthorizationPolicyController` you will find a bulk api endpoint which you can use, OR you can feed the database directly OR build your own policy creation GUI etc.
+Models with the `...Model` suffix are pure Vapor models and reference types. There can be Data-Transfer-Objects, these are structs, value types, and are used for transferring data between the API and clients. This DTO's can be shared across projects (e.g. Vapor API and iOS client) using a separate swift package.
 For example here `UserModel` and `User` or `RoleModel` and `Role`.
 
-A big benefit of the ABACAuthorizationPolicy, you don't need to restart the api/service after adding or modyfing policies. It's runtime configurable.
+A big benefit of the ABACAuthorizationPolicy, you don't need to restart the api/service after adding or modifying policies. It's runtime configurable.
 
 ## Auth Policies
 1. Take a look at the default `Auth Policies`. Only the policies you see in here, allows actions on the resource. Everything else will throw a 403: Forbidden error.
