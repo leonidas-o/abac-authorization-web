@@ -8,7 +8,7 @@ This demo-project (brought together under one hood out of two projects - api and
 Detailed instructions how to use ABACAuthorization package can be found in the package's README file.
 Http Port can be set via `HTTP_PORT` Environment variable, if not set, it defaults to 8080.
 
-> IMPORTANT: At the beginning, the most routes will throw a 403: Forbidden. This is expected, as the default `Auth Policies` are only providing minimal access (see Auth Policies section).
+> IMPORTANT: At the beginning, the most routes will throw a 403: Forbidden. This is expected, as the default `Auth Policies` are only providing minimal access (see Auth Policies section). Not all Frontend route handlers are implemented like in `TodoController`, this leads to some of the forms not doing anything. However the API route handlers should be implemented and these routes can be tested via a REST client.  
 
 
 ## Login

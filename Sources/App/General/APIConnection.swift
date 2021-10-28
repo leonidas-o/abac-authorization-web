@@ -1,4 +1,4 @@
-import Foundation
+import Vapor
 
 enum APIConnection {
     static let scheme = "http"
