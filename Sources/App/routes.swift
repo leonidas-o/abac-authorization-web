@@ -11,6 +11,5 @@ func routes(_ app: Application) throws {
     try app.register(collection: TodoController(cache: app.cacheRepo))
     // ABACAuthorization
     try app.register(collection: ABACAuthorizationPolicyController(cache: app.cacheRepo))
-    // ABACConditionController not implemented yet
-//    try app.register(collection: ABACConditionController(cache: app.cacheRepo))
+    try app.register(collection: ABACConditionController(cache: app.cacheRepo))
 }

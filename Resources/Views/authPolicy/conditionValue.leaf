@@ -10,7 +10,7 @@
             
             
             <div class="form-group row">
-                <label for="role_name" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Key*</label>
+                <label for="key" class="col-6 col-sm-4 col-md-4 col-lg-3 col-form-label">Key*</label>
                 <div class="col-6 col-sm-8 col-md-8 col-lg-9">
                 <input type="text" name="key" class="form-control" id="key" #if(editing): value="#(abacCondition.key)" #endif/>
                 </div>
@@ -76,13 +76,13 @@
                 </div>
             </div>
             
-            <p>* Condition value key has to be unique for its specified authorization policy. If left empty, a default value will be assigned.</p>
+            <p>* Condition value key has to be unique for its specified authorization policy e.g. 'key1', 'key2' etc. If left empty, 'default' will be assigned.</p>
             
             
             #if(editing):
-            <input type="hidden" name="authorizationPolicyID" id="authorization_policy_id" value="#(abacCondition.authorizationPolicyID)"/>
+            <input type="hidden" name="authorizationPolicyId" id="authorization_policy_id" value="#(abacCondition.authorizationPolicyId)"/>
             #else:
-            <input type="hidden" name="authorizationPolicyID" id="authorization_policy_id" value="#(authPolicyID)"/>
+            <input type="hidden" name="authorizationPolicyId" id="authorization_policy_id" value="#(authPolicyId)"/>
             #endif
             
             <button type="submit" class="btn btn-primary">
