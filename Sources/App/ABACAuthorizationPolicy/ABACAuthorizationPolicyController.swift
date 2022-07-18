@@ -48,12 +48,12 @@ struct ABACAuthorizationPolicyController: RouteCollection {
         authGroup.post("delete", "confirm", use: deleteConfirmPost)
         
         // Relations
-        authGroup.get("condition-value/create", use: createCondition)
-        authGroup.post("condition-value/create", use: createConditionPost)
-        authGroup.post("condition-value/update", use: updateConditionPost)
-        authGroup.post("condition-value/update/confirm", use: updateConditionConfirmPost)
-        authGroup.post("condition-value/delete", use: deleteConditionPost)
-        authGroup.post("condition-value/delete/confirm", use: deleteConditionConfirmPost)
+        authGroup.get("condition-value", "create", use: createCondition)
+        authGroup.post("condition-value", "create", use: createConditionPost)
+        authGroup.post("condition-value", "update", use: updateConditionPost)
+        authGroup.post("condition-value", "update", "confirm", use: updateConditionConfirmPost)
+        authGroup.post("condition-value", "delete", use: deleteConditionPost)
+        authGroup.post("condition-value", "delete", "confirm", use: deleteConditionConfirmPost)
     }
     
     
