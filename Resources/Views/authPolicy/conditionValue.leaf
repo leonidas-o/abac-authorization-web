@@ -76,7 +76,7 @@
                 </div>
             </div>
             
-            <p>* Condition value key has to be unique for its specified authorization policy e.g. 'key1', 'key2' etc. If left empty, 'default' will be assigned.</p>
+            <p>* Condition value key has to be unique for its specified authorization policy e.g. 'key1', 'key2' etc. If left empty, a default key will be assigned. See default value in ABACConditionModel in abac-authorization package.</p>
             
             
             #if(editing):

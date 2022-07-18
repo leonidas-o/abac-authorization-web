@@ -47,7 +47,8 @@ So you could build a policy with a condition like:
 - Left hand side is a `reference` to `user.name`
 - Right hand side is a `value` for example `foo`
 
-Pretty straight forward, that would only grant access if the users name is equal to `foo`. 
+Pretty straight forward, that would only grant access if the users name is equal to `foo`.
+> The key has to be unique for that specific authorization policy e.g. key1, key2, ... .
 
 
 ## Advice
