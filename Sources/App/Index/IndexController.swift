@@ -17,46 +17,56 @@ struct IndexController: RouteCollection {
     
     
     
-    func overviewHandler(_ req: Request) throws -> EventLoopFuture<View> {
+    func overviewHandler(_ req: Request) async throws -> View {
         let user = try req.auth.require(User.Public.self)
         let context: OverviewContext
         context = OverviewContext(user: user,
                                   error: req.query[String.self, at: "error"])
-        return req.view.render("index", context)
+        return try await req.view.render("index", context)
     }
     
-    func logoutTmpHandler(_ req: Request) throws -> EventLoopFuture<Response> {
+    func logoutTmpHandler(_ req: Request) async throws -> Response {
         let auth = Auth(req: req)
-        guard let token = auth.getAccessToken() else {
+        guard let token = auth.accessToken else {
             throw Abort(HTTPResponseStatus.notFound, reason: "AccessToken not found")
         }
-        let logoutRequest = ResourceRequest<NoRequestType, StatusCodeResponseType>(resourcePath: "/\(APIResource.Resource.auth.rawValue)/\(APIResource.Resource.logout.rawValue)")
-        return logoutRequest.futureLogout(req, token: token).map { apiResponse in
-                auth.loggedOut()
-                return req.redirect(to: "/")
-        }.flatMapErrorThrowing { error in
-                let errorMessage = error.getMessage()
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource.Resource.auth.rawValue)/\(APIResource.Resource.logout.rawValue)")
+        let response = try await req.client.post(uri) { clientReq in
+            clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+        }
+        do {
+            try response.checkHttpDeleteLogout(auth)
+            auth.loggedOut()
+            return req.redirect(to: "/")
+        } catch {
+            let errorMessage = error.getMessage()
             return req.redirect(to: "/?error=\(errorMessage)")
         }
     }
     
     
     
-    func loginTmpHandler(_ req: Request) throws -> EventLoopFuture<View> {
+    func loginTmpHandler(_ req: Request) async throws -> View {
         let context = LoginContext(error: req.query[String.self, at: "error"])
-        return req.view.render("login", context)
+        return try await req.view.render("login", context)
     }
     
-    func loginTmpPostHandler(_ req: Request) throws -> EventLoopFuture<Response> {
+    func loginTmpPostHandler(_ req: Request) async throws -> Response {
         let loginData = try req.content.decode(LoginData.self)
-        let loginRequest = ResourceRequest<NoRequestType, TokensResponse>(resourcePath: "/\(APIResource.Resource.auth.rawValue)/\(APIResource.Resource.login.rawValue)")
-        return loginRequest.futureLogin(req, username: loginData.username, password: loginData.password)
-            .map { apiResponse in
-                Auth(req: req).loggedIn(with: apiResponse)
-                return req.redirect(to: "/")
-            }.flatMapErrorThrowing { error in
-                let errorMessage = error.getMessage()
-                return req.redirect(to: "/login?error=\(errorMessage)")
+        
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource.Resource.auth.rawValue)/\(APIResource.Resource.login.rawValue)")
+        let response = try await req.client.post(uri) { clientReq in
+            clientReq.headers.basicAuthorization = BasicAuthorization(username: loginData.username, password: loginData.password)
+        }
+        do {
+            try response.checkHttpLogin(auth)
+            let responseDecoded = try response.content.decode(TokensResponse.self)
+            Auth(req: req).loggedIn(with: responseDecoded)
+            return req.redirect(to: "/")
+        } catch {
+            let errorMessage = error.getMessage()
+            return req.redirect(to: "/login?error=\(errorMessage)")
         }
     }
     

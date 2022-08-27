@@ -1,7 +1,6 @@
 import Vapor
 import Fluent
 
-
 /// A single entry of a todo list.
 final class TodoModel: Model {
     
@@ -43,17 +42,17 @@ extension TodoModel: Content { }
 // MARK: - Migration
 
 /// Allows `Todo` to be used as a Fluent migration.
-struct TodoModelMigration: Migration {
-    func prepare(on database: Database) -> EventLoopFuture<Void> {
-        database.schema("todo")
+struct TodoModelMigration: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        try await database.schema("todo")
         .field(.id, .int, .identifier(auto: true), .required)
         .field("title", .string, .required)
         .field("user_id", .uuid, .required, .references("user", "id"))
         .create()
     }
     
-    func revert(on database: Database) -> EventLoopFuture<Void> {
-        database.schema("todo")
+    func revert(on database: Database) async throws {
+        try await database.schema("todo")
         .delete()
     }
 }

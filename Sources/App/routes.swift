@@ -1,6 +1,5 @@
 import Vapor
 
-
 /// Register your application's routes here.
 func routes(_ app: Application) throws {
     

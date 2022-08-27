@@ -1,7 +1,6 @@
 import Foundation
 import Vapor
 
-
 struct AuthenticateData: Codable {
     let id: UUID?
     let token: String

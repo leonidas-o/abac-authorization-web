@@ -12,7 +12,13 @@ struct Prepare: LifecycleHandler {
             let query = SQLQueryString("SELECT EXISTS (SELECT FROM pg_tables where tablename  = '" + ABACAuthorizationPolicyModel.schema + "');")
             let abacPolicySchema = try sql.raw(query).first(decoding: [String:Bool].self).wait()
             if abacPolicySchema?.first?.value == true {
-                let policies = try app.abacAuthorizationRepo.getAllWithConditions().wait()
+//                let policies = try app.abacAuthorizationRepo.getAllWithConditions().wait()
+                let promise = app.db.eventLoop.makePromise(of: [ABACAuthorizationPolicyModel].self)
+                promise.completeWithTask {
+                    try await app.abacAuthorizationRepo.getAllWithConditions()
+                }
+                let policies = try promise.futureResult.wait()
+                
                 for policy in policies {
                     try app.abacAuthorizationPolicyService.addToInMemoryCollection(policy: policy, conditions: policy.conditions)
                 }

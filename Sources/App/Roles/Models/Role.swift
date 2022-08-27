@@ -1,7 +1,6 @@
 import Foundation
 import Vapor
 
-
 protocol RoleDefinition {
     var id: Int? { get set }
     var name: String { get set }

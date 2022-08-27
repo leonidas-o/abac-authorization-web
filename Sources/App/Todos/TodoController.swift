@@ -2,7 +2,6 @@ import Vapor
 import Fluent
 import ABACAuthorization
 
-
 /// Simple todo-list controller.
 struct TodoController: RouteCollection {
     
@@ -49,17 +48,16 @@ struct TodoController: RouteCollection {
     // MARK: - API
     
     /// Returns a list of all todos for the auth'd user.
-    func index(_ req: Request) throws -> EventLoopFuture<[TodoModel]> {
+    func index(_ req: Request) async throws -> [TodoModel] {
         // fetch auth'd user
         let user = try req.auth.require(UserModel.self)
         let userId = try user.requireID()
         // query all todo's belonging to user
-        return TodoModel.query(on: req.db)
-            .filter(\.$user.$id == userId).all()
+        return try await TodoModel.query(on: req.db).filter(\.$user.$id == userId).all()
     }
 
     /// Creates a new todo for the auth'd user.
-    func create(_ req: Request) throws -> EventLoopFuture<TodoModel> {
+    func create(_ req: Request) async throws -> TodoModel {
         // fetch auth'd user
         let user = try req.auth.require(UserModel.self)
         
@@ -67,12 +65,12 @@ struct TodoController: RouteCollection {
         let todo = try req.content.decode(CreateTodoRequest.self)
         // save new todo
         let todoModel = try TodoModel(title: todo.title, userId: user.requireID())
-        return todoModel.save(on: req.db)
-            .transform(to: todoModel)
+        try await todoModel.save(on: req.db)
+        return todoModel
     }
 
     /// Deletes an existing todo for the auth'd user.
-    func delete(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    func delete(_ req: Request) async throws -> HTTPStatus {
         // fetch auth'd user
         let user = try req.auth.require(UserModel.self)
         
@@ -80,19 +78,16 @@ struct TodoController: RouteCollection {
         guard let todoId = req.parameters.get("todoId", as: Int.self) else {
             throw Abort(.badRequest)
         }
-        return TodoModel.query(on: req.db).filter(\.$id == todoId).first().unwrap(or: Abort(.badRequest)).flatMap { todo in
-            // ensure the todo being deleted belongs to this user
-            do {
-                guard try todo.$user.id == user.requireID() else {
-                    throw Abort(.forbidden)
-                }
-            } catch {
-                return req.eventLoop.makeFailedFuture(error)
-            }
-            // delete model
-            return todo.delete(on: req.db)
-                .transform(to: .ok)
+        guard let todo = try await TodoModel.query(on: req.db).filter(\.$id == todoId).first() else {
+            throw Abort(.badRequest)
         }
+        // ensure the todo being deleted belongs to this user
+        guard try todo.$user.id == user.requireID() else {
+            throw Abort(.forbidden)
+        }
+        // delete model
+        try await todo.delete(on: req.db)
+        return .ok
     }
     
     
@@ -102,17 +97,24 @@ struct TodoController: RouteCollection {
     
     // MARK: - FRONTEND
     
-    func overviewHandler(_ req: Request) throws -> EventLoopFuture<View> {
-        let todoRequest = ResourceRequest<NoRequestType, [CreateTodoRequest]>(resourcePath: "/api/todos")
-        return todoRequest.futureGetAll(req).flatMap { apiResponse in
-            let context = TodoOverviewContext(
-                title: "Todo's",
-                content: apiResponse,
-                formActionUpdate: "/todos/update",
-                formActionDelete: "/todos/delete",
-                error: req.query[String.self, at: "error"])
-            return req.view.render("todo/todos", context)
+    func overviewHandler(_ req: Request) async throws -> View {
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.todos.rawValue)")
+        let response = try await req.client.get(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
         }
+        try response.checkHttpGet(auth)
+        let responseDecoded = try response.content.decode([CreateTodoRequest].self)
+        
+        let context = TodoOverviewContext(
+            title: "Todo's",
+            content: responseDecoded,
+            formActionUpdate: "/todos/update",
+            formActionDelete: "/todos/delete",
+            error: req.query[String.self, at: "error"])
+        return try await req.view.render("todo/todos", context)
     }
     
     // same as other fronted crud handlers

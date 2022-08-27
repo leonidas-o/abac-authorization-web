@@ -1,6 +1,5 @@
 import Vapor
 
-
 struct RolePersistenceRepoFactory {
     var make: ((Request) -> RolePersistenceRepo)?
     mutating func use(_ make: @escaping ((Request) -> RolePersistenceRepo)) {

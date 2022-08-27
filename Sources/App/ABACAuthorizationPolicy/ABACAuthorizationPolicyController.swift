@@ -63,95 +63,96 @@ struct ABACAuthorizationPolicyController: RouteCollection {
     
     // MARK: - API
     
-    func apiGetAll(_ req: Request) throws -> EventLoopFuture<[ABACAuthorizationPolicy]> {
-        return req.abacAuthorizationRepo.getAllWithConditions().map { policies in
-            
-            return policies.map { policy -> ABACAuthorizationPolicy in
-                let abacConditions = policy.conditions.map { $0.convertToABACCondition() }
-                return ABACAuthorizationPolicy(id: policy.id,
-                                               roleName: policy.roleName,
-                                               actionKey: policy.actionKey,
-                                               actionValue: policy.actionValue,
-                                               conditions: abacConditions)
-            }
+    func apiGetAll(_ req: Request) async throws -> [ABACAuthorizationPolicy] {
+        let policies = try await req.abacAuthorizationRepo.getAllWithConditions()
+        return policies.map { policy -> ABACAuthorizationPolicy in
+            let abacConditions = policy.conditions.map { $0.convertToABACCondition() }
+            return ABACAuthorizationPolicy(id: policy.id,
+                                           roleName: policy.roleName,
+                                           actionKey: policy.actionKey,
+                                           actionValue: policy.actionValue,
+                                           conditions: abacConditions)
         }
     }
     
     
-    func apiGet(_ req: Request) throws -> EventLoopFuture<ABACAuthorizationPolicy> {
+    func apiGet(_ req: Request) async throws -> ABACAuthorizationPolicy {
         guard let policyId = req.parameters.get("policyId", as: ABACAuthorizationPolicyModel.IDValue.self) else {
             throw Abort(.badRequest)
         }
-        return req.abacAuthorizationRepo.getWithConditions(policyId).unwrap(or: Abort(.badRequest)).map { policy in
-            var converted = policy.convertToABACAuthorizationPolicy()
-            converted.conditions = policy.conditions.map { $0.convertToABACCondition() }
-            return converted
+        guard let policy = try await req.abacAuthorizationRepo.getWithConditions(policyId) else {
+            throw Abort(.badRequest)
         }
+        var converted = policy.convertToABACAuthorizationPolicy()
+        converted.conditions = policy.conditions.map { $0.convertToABACCondition() }
+        return converted
     }
     
     
-    func apiCreate(_ req: Request) throws -> EventLoopFuture<ABACAuthorizationPolicy> {
+    func apiCreate(_ req: Request) async throws -> ABACAuthorizationPolicy {
         let content = try req.content.decode(ABACAuthorizationPolicy.self)
         
         let policy = content.convertToABACAuthorizationPolicyModel()
-        return req.abacAuthorizationRepo.save(policy)
-            .transform(to: policy.convertToABACAuthorizationPolicy())
+        try await req.abacAuthorizationRepo.save(policy)
+        return policy.convertToABACAuthorizationPolicy()
     }
     
     
-    func apiUpdate(_ req: Request) throws -> EventLoopFuture<ABACAuthorizationPolicy> {
+    func apiUpdate(_ req: Request) async throws -> ABACAuthorizationPolicy {
         guard let policyId = req.parameters.get("policyId", as: ABACAuthorizationPolicyModel.IDValue.self) else {
             throw Abort(.badRequest)
         }
         let updatedAuthPolicy = try req.content.decode(ABACAuthorizationPolicy.self)
-        return req.abacAuthorizationRepo.getWithConditions(policyId).unwrap(or: Abort(.badRequest)).flatMap { policy in
-            return req.abacAuthorizationRepo.update(policy, updatedPolicy: updatedAuthPolicy).map {
-                var converted = policy.convertToABACAuthorizationPolicy()
-                converted.conditions = policy.conditions.map { $0.convertToABACCondition() }
-                return converted
-            }
+        guard let policy = try await req.abacAuthorizationRepo.getWithConditions(policyId) else {
+            throw Abort(.badRequest)
         }
+        try await req.abacAuthorizationRepo.update(policy, updatedPolicy: updatedAuthPolicy)//.map {
+        var converted = policy.convertToABACAuthorizationPolicy()
+        converted.conditions = policy.conditions.map { $0.convertToABACCondition() }
+        return converted
     }
     
     
-    func apiDelete(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    func apiDelete(_ req: Request) async throws -> HTTPStatus {
         guard let policyId = req.parameters.get("policyId", as: ABACAuthorizationPolicyModel.IDValue.self) else {
             throw Abort(.badRequest)
         }
         // Fetch model to call delete on model because of
         // https://github.com/vapor/fluent/issues/704
-        return req.abacAuthorizationRepo.get(policyId).unwrap(or: Abort(.noContent)).map { policy in
-            return req.abacAuthorizationRepo.delete(policy)
-        }.transform(to: .noContent)
+        guard let policy = try await req.abacAuthorizationRepo.get(policyId) else {
+            throw Abort(.noContent)
+        }
+        try await req.abacAuthorizationRepo.delete(policy)
+        return .noContent
     }
     
     
     
     // MARK: Relations
     
-    func apiGetAllRelatedConditions(_ req: Request) throws -> EventLoopFuture<[ABACCondition]> {
+    func apiGetAllRelatedConditions(_ req: Request) async throws -> [ABACCondition] {
         guard let policyId = req.parameters.get("policyId", as: ABACAuthorizationPolicyModel.IDValue.self) else {
             throw Abort(.badRequest)
         }
-        return req.abacAuthorizationRepo.getWithConditions(policyId).unwrap(or: Abort(.badRequest)).map { policy in
-            return policy.conditions.map { $0.convertToABACCondition() }
+        guard let policy = try await req.abacAuthorizationRepo.getWithConditions(policyId) else {
+            throw Abort(.badRequest)
         }
+        return policy.conditions.map { $0.convertToABACCondition() }
     }
     
     
     
     // MARK: ABACAuthorizationPolicyService
     
-    func _recreateAllInMemoryPolicies(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    func _recreateAllInMemoryPolicies(_ req: Request) async throws -> HTTPStatus {
         if let address = req.query[String.self, at: "\(APIResource.UrlQuery.address.rawValue)"] {
-            return triggerRecreationForAllInstances(req, address: address)
+            return try await triggerRecreationForAllInstances(req, address: address)
         } else {
-            return req.abacAuthorizationRepo.getAllWithConditions().flatMapThrowing { policies in
-                for policy in policies {
-                    try req.abacAuthorizationPolicyService.addToInMemoryCollection(policy: policy, conditions: policy.conditions)
-                }
-                return .noContent
+            let policies = try await req.abacAuthorizationRepo.getAllWithConditions()
+            for policy in policies {
+                try req.abacAuthorizationPolicyService.addToInMemoryCollection(policy: policy, conditions: policy.conditions)
             }
+            return .noContent
         }
     }
     
@@ -159,77 +160,68 @@ struct ABACAuthorizationPolicyController: RouteCollection {
         typealias Value = DNSClient
     }
     
-    private func triggerRecreationForAllInstances(_ req: Request, address: String) -> EventLoopFuture<HTTPStatus> {
+    private func triggerRecreationForAllInstances(_ req: Request, address: String) async throws -> HTTPStatus {
         
-        return DNSClient.connect(on: req.eventLoop).flatMap { client in
-            req.storage.set(DNSClientKey.self, to: client)
-            return client.sendQuery(forHost: address, type: .a).flatMap { records in
+        let client = try await DNSClient.connect(on: req.eventLoop).get()
+        req.storage.set(DNSClientKey.self, to: client)
+        let records = try await client.sendQuery(forHost: address, type: .a).get()
                 
-                // reset system-bot password and cache it
-                let random = [UInt8].random(count: SystemBotUserMigration.Constant.passwordLength).base64
-                let password = try? Bcrypt.hash(random)
-                guard let hashedPassword = password else {
-                    return req.eventLoop.makeFailedFuture(Abort(.internalServerError))
-                }
-                return req.userRepo.get(byEmail: SystemBotUserMigration.Constant.email).unwrap(or: Abort(.internalServerError)).flatMap { botUser in
-                    botUser.password = hashedPassword
-                    return req.userRepo.save(botUser)
-                        .transform(to: botUser)
-                }.flatMap { botUser in
-                    return login(req, user: botUser, password: random)
-                }.flatMap { headers in
-                    return send(req, onRecords: records, headers: headers)
-                }
-            }
+        // reset system-bot password and cache it
+        let random = [UInt8].random(count: SystemBotUserMigration.Constant.passwordLength).base64
+        let password = try? Bcrypt.hash(random)
+        guard let hashedPassword = password else {
+            throw Abort(.internalServerError)
         }
+        guard let botUser = try await req.userRepo.get(byEmail: SystemBotUserMigration.Constant.email) else {
+            throw Abort(.internalServerError)
+        }
+        botUser.password = hashedPassword
+        try await req.userRepo.save(botUser)
+        let headers = try await login(req, user: botUser, password: random)
+        return try await send(req, onRecords: records, headers: headers)
     }
     
-    private func login(_ req: Request, user: UserModel, password: String) -> EventLoopFuture<HTTPHeaders> {
-        let authUri = "/\(APIResource.Resource.auth.rawValue)/"
+    private func login(_ req: Request, user: UserModel, password: String) async throws -> HTTPHeaders {
+        let authUri = "\(APIConnection.apiBaseURL)/\(APIResource.Resource.auth.rawValue)/"
         var headers: HTTPHeaders = .init()
         let credentials = BasicAuthorization(username: user.email, password: password)
         var basicHeaders = HTTPHeaders()
         basicHeaders.basicAuthorization = credentials
         
         var apiTokens: TokensResponse? = nil
-        return req.client.post(URI(string: authUri), headers: basicHeaders).flatMap { res in
-            do {
-                apiTokens = try res.content.decode(TokensResponse.self)
-            } catch {
-                return req.eventLoop.makeFailedFuture(Abort(.internalServerError))
-            }
-            headers.add(name: .authorization, value: "Bearer \(apiTokens!.accessData.token)")
-            return req.eventLoop.makeSucceededFuture(headers)
-        }
+        let res = try await req.client.post(URI(string: authUri), headers: basicHeaders)
+        apiTokens = try res.content.decode(TokensResponse.self)
+        headers.add(name: .authorization, value: "Bearer \(apiTokens!.accessData.token)")
+        return headers
     }
     
-    private func send(_ req: Request, onRecords records: Message, headers: HTTPHeaders) -> EventLoopFuture<HTTPStatus> {
-        var result: [EventLoopFuture<ClientResponse>] = []
-        for record in records.answers {
-            switch record {
-            case .a(let resourceRecord):
-                result.append(req.client.put(URI(string:"\(resourceRecord.resource.stringAddress):\(APIConnection.port)/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)/\(APIResource.Resource.abacAuthPoliciesService.rawValue)"), headers: headers))
-            default:
-                continue // do nothing
+    private func send(_ req: Request, onRecords records: Message, headers: HTTPHeaders) async throws -> HTTPStatus {
+        await withThrowingTaskGroup(of: Void.self) { taskGroup in
+            for record in records.answers {
+                switch record {
+                case .a(let resourceRecord):
+                    taskGroup.addTask {
+                        _ = try await req.client.put(URI(string:"\(resourceRecord.resource.stringAddress):\(APIConnection.port)/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)/\(APIResource.Resource.abacAuthPoliciesService.rawValue)"), headers: headers)
+                    }
+                default:
+                    continue // do nothing
+                }
             }
         }
-        return result.flatten(on: req.eventLoop)
-            .transform(to: .noContent)
+        return .noContent
     }
     
     
     
     // MARK: Bulk
      
-    func apiCreateBulk(_ req: Request) throws -> EventLoopFuture<[ABACAuthorizationPolicy]> {
+    func apiCreateBulk(_ req: Request) async throws -> [ABACAuthorizationPolicy] {
         let authPolicies = try req.content.decode([ABACAuthorizationPolicy].self).map { policy in
             policy.convertToABACAuthorizationPolicyModel()
         }
-        return req.abacAuthorizationRepo.saveBulk(authPolicies).flatMap {
-            return req.abacAuthorizationRepo.getAllWithConditions().map { policies in
-                return policies.map { $0.convertToABACAuthorizationPolicy() }
-            }
-        }
+        try await req.abacAuthorizationRepo.saveBulk(authPolicies)
+        let policies = try await req.abacAuthorizationRepo.getAllWithConditions()
+        return policies.map { $0.convertToABACAuthorizationPolicy() }
     }
     
     
@@ -243,50 +235,67 @@ struct ABACAuthorizationPolicyController: RouteCollection {
     
     // MARK: Read
     
-    func overview(_ req: Request) throws -> EventLoopFuture<View> {
-        let authPolicyRequest = ResourceRequest<NoRequestType, [ABACAuthorizationPolicy]>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)")
-        return authPolicyRequest.futureGetAll(req).flatMap { apiResponse in
-            let context = AuthorizationPolicyOverviewContext(
-                title: "Authorization Policies",
-                createAuthPolicyURI: "/authorization-policies/create",
-                content: apiResponse,
-                formActionUpdate: "/authorization-policies/update",
-                formActionDelete: "/authorization-policies/delete",
-                error: req.query[String.self, at: "error"])
-            return req.view.render("authPolicy/authorizationPolicies", context)
+    func overview(_ req: Request) async throws -> View {
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)")
+        let response = try await req.client.get(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
         }
+        try response.checkHttpGet(auth)
+        let responseDecoded = try response.content.decode([ABACAuthorizationPolicy].self)
+        let context = AuthorizationPolicyOverviewContext(
+            title: "Authorization Policies",
+            createAuthPolicyURI: "/authorization-policies/create",
+            content: responseDecoded,
+            formActionUpdate: "/authorization-policies/update",
+            formActionDelete: "/authorization-policies/delete",
+            error: req.query[String.self, at: "error"])
+        return try await req.view.render("authPolicy/authorizationPolicies", context)
     }
     
     
     
     // MARK: Create
     
-    func create(_ req: Request) throws -> EventLoopFuture<View> {
-        
-        let roleRequest = ResourceRequest<NoRequestType, [Role]>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
-        return roleRequest.futureGetAll(req).flatMap { apiResponse in
-            
-            let roleNames = apiResponse.map { $0.name }
-            let actions = ABACAPIAction.allCases.map { "\($0)" }
-            let resources = APIResource._allProtected
-            
-            let context = CreateAuthorizationPolicyContext(
-                title: "Create Authorization Policy",
-                roleNames: roleNames,
-                actions: actions,
-                resources: resources,
-                error: req.query[String.self, at: "error"])
-            return req.view.render("authPolicy/authorizationPolicy", context)
+    func create(_ req: Request) async throws -> View {
+        let auth = Auth(req: req)
+        let uri = URI(string: "/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
+        let response = try await req.client.get(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
         }
+        try response.checkHttpGet(auth)
+        let responseDecoded = try response.content.decode([Role].self)
+        let roleNames = responseDecoded.map { $0.name }
+        let actions = ABACAPIAction.allCases.map { "\($0)" }
+        let resources = APIResource._allProtected
         
+        let context = CreateAuthorizationPolicyContext(
+            title: "Create Authorization Policy",
+            roleNames: roleNames,
+            actions: actions,
+            resources: resources,
+            error: req.query[String.self, at: "error"])
+        return try await req.view.render("authPolicy/authorizationPolicy", context)
     }
     
-    func createPost(_ req: Request) throws -> EventLoopFuture<Response> {
+    func createPost(_ req: Request) async throws -> Response {
         let authPolicy = try req.content.decode(ABACAuthorizationPolicy.self)
-        let authPolicyRequest = ResourceRequest<ABACAuthorizationPolicy, ABACAuthorizationPolicy>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)")
-        return authPolicyRequest.futureCreate(req, resourceToSave: authPolicy).map { apiResponse in
-                return req.redirect(to: "/authorization-policies")
-        }.flatMapErrorThrowing { error in
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)")
+        let response = try await req.client.post(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
+            try clientReq.content.encode(authPolicy, as: .json)
+        }
+        do {
+            try response.checkHttpPutPostPatch(auth)
+            return req.redirect(to: "/authorization-policies")
+        } catch {
             let errorMessage = error.getMessage()
             return req.redirect(to: "/authorization-policies/create?error=\(errorMessage)")
         }
@@ -296,59 +305,67 @@ struct ABACAuthorizationPolicyController: RouteCollection {
     
     // MARK: Update
     
-    func updatePost(_ req: Request) throws -> EventLoopFuture<View> {
+    func updatePost(_ req: Request) async throws -> View {
         let policy = try req.content.decode(ABACAuthorizationPolicy.self)
         guard let policyId = policy.id else {
             throw Abort(.internalServerError)
         }
         
-        let roleRequest = ResourceRequest<NoRequestType, [Role]>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
-        let authorizationPolicyRequest = ResourceRequest<NoRequestType, ABACAuthorizationPolicy>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)/\(policyId)")
+        let auth = Auth(req: req)
+        guard let token = auth.accessToken else { throw Abort(.unauthorized, reason: "Invalid token") }
+        let roleUri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
+        let authorizationPolicyUri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)/\(policyId)")
+        async let roleRequest = req.client.get(roleUri) { $0.headers.bearerAuthorization = BearerAuthorization(token: token) }
+        async let authorizationPolicyRequest = req.client.get(authorizationPolicyUri) { $0.headers.bearerAuthorization = BearerAuthorization(token: token) }
+        let roleResponse = try await roleRequest
+        let authorizationPolicyResponse = try await authorizationPolicyRequest
+        try roleResponse.checkHttpGet(auth)
+        try authorizationPolicyResponse.checkHttpGet(auth)
+        let roleResponseDecoded = try roleResponse.content.decode([Role].self)
+        let authorizationPolicyResponseDecoded = try authorizationPolicyResponse.content.decode(ABACAuthorizationPolicy.self)
         
-        return roleRequest.futureGetAll(req)
-            .and(authorizationPolicyRequest.futureGetAll(req)).flatMap { roles, authPolicy in
+        let roleNames = roleResponseDecoded.map{ $0.name }
+        let actions = ABACAPIAction.allCases.map{ "\($0)" }
+        let resources = APIResource.Resource.allCases.map{ $0.rawValue }
+        
+        let actionOnResourceKey = try self.splitActionOnResource(fromKey: policy.actionKey, allActions: actions, allResources: resources)
             
-            let roleNames = roles.map{ $0.name }
-            let actions = ABACAPIAction.allCases.map{ "\($0)" }
-            let resources = APIResource.Resource.allCases.map{ $0.rawValue }
-                
-            let actionOnResourceKey: (selectedAction: String, selectedResource: String)
-            do {
-                actionOnResourceKey = try self.splitActionOnResource(fromKey: policy.actionKey, allActions: actions, allResources: resources)
-            } catch {
-                return req.eventLoop.makeFailedFuture(error)
-            }
-                
-            let context = UpdateAuthorizationPolicyContext(
-                title: "Update Authorization Policy",
-                titleConditions: "Update Condition Values",
-                roleNames: roleNames,
-                actions: actions,
-                resources: resources,
-                selectedAction: actionOnResourceKey.selectedAction,
-                selectedResource: actionOnResourceKey.selectedResource,
-                authPolicy: authPolicy,
-                formActionAuthPolicy: "update/confirm",
-                createConditionURI: "condition-value/create?auth-policy-id=\(policyId)",
-                formActionConditionUpdate: "condition-value/update",
-                formActionConditionDelete: "condition-value/delete")
-            return req.view.render("authPolicy/authorizationPolicy", context)
-        }
+        let context = UpdateAuthorizationPolicyContext(
+            title: "Update Authorization Policy",
+            titleConditions: "Update Condition Values",
+            roleNames: roleNames,
+            actions: actions,
+            resources: resources,
+            selectedAction: actionOnResourceKey.selectedAction,
+            selectedResource: actionOnResourceKey.selectedResource,
+            authPolicy: authorizationPolicyResponseDecoded,
+            formActionAuthPolicy: "update/confirm",
+            createConditionURI: "condition-value/create?auth-policy-id=\(policyId)",
+            formActionConditionUpdate: "condition-value/update",
+            formActionConditionDelete: "condition-value/delete")
+        return try await req.view.render("authPolicy/authorizationPolicy", context)
     }
     
     
-    func updateConfirmPost(_ req: Request) throws -> EventLoopFuture<Response> {
+    func updateConfirmPost(_ req: Request) async throws -> Response {
         let authPolicy = try req.content.decode(ABACAuthorizationPolicy.self)
         guard let uuid = authPolicy.id?.uuidString else {
-            return req.eventLoop.makeSucceededFuture(req.redirect(to: "/authorization-policies?error=Update failed: UUID corrupt"))
+            return req.redirect(to: "/authorization-policies?error=Update failed: UUID corrupt")
         }
-        let authorizationPolicyRequest = ResourceRequest<ABACAuthorizationPolicy, ABACAuthorizationPolicy>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)/\(uuid)")
-        return authorizationPolicyRequest.futureUpdate(req, resourceToUpdate: authPolicy)
-            .map { apiResponse in
-                return req.redirect(to: "/authorization-policies")
-            }.flatMapErrorThrowing { error in
-                let errorMessage = error.getMessage()
-                return req.redirect(to: "/authorization-policies?error=\(errorMessage)")
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)/\(uuid)")
+        let response = try await req.client.put(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
+            try clientReq.content.encode(authPolicy, as: .json)
+        }
+        do {
+            try response.checkHttpPutPostPatch(auth)
+            return req.redirect(to: "/authorization-policies")
+        } catch {
+            let errorMessage = error.getMessage()
+            return req.redirect(to: "/authorization-policies?error=\(errorMessage)")
         }
     }
     
@@ -356,7 +373,7 @@ struct ABACAuthorizationPolicyController: RouteCollection {
     
     // MARK: Delete
     
-    func deletePost(_ req: Request) throws -> EventLoopFuture<View> {
+    func deletePost(_ req: Request) async throws -> View {
         let policy = try req.content.decode(ABACAuthorizationPolicy.self)
         let roleName = policy.roleName // no need to request the api
         let actions = ABACAPIAction.allCases.map { "\($0)" }
@@ -373,20 +390,27 @@ struct ABACAuthorizationPolicyController: RouteCollection {
             selectedResource: actionOnResourceKey.selectedResource,
             authPolicy: policy,
             formActionAuthPolicy: "delete/confirm")
-        return req.view.render("authPolicy/authorizationPolicyDelete", context)
+        return try await req.view.render("authPolicy/authorizationPolicyDelete", context)
     }
     
-    func deleteConfirmPost(_ req: Request) throws -> EventLoopFuture<Response> {
+    func deleteConfirmPost(_ req: Request) async throws -> Response {
         let authPolicy = try req.content.decode(ABACAuthorizationPolicy.self)
         guard let authPolicyId = authPolicy.id else {
-            return req.eventLoop.makeSucceededFuture(req.redirect(to: "/authorization-policies?error=Delete failed: UUID corrupt"))
+            return req.redirect(to: "/authorization-policies?error=Delete failed: UUID corrupt")
         }
-        let authPolicyRequest = ResourceRequest<NoRequestType, StatusCodeResponseType>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)/\(authPolicyId)")
-        return authPolicyRequest.fututeDelete(req).map { apiResponse in
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)/\(authPolicyId)")
+        let response = try await req.client.delete(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
+        }
+        do {
+            try response.checkHttpDeleteLogout(auth)
             return req.redirect(to: "/authorization-policies")
-            }.flatMapErrorThrowing { error in
-                let errorMessage = error.getMessage()
-                return req.redirect(to: "/authorization-policies?error=\(errorMessage)")
+        } catch {
+            let errorMessage = error.getMessage()
+            return req.redirect(to: "/authorization-policies?error=\(errorMessage)")
         }
     }
     
@@ -399,7 +423,7 @@ struct ABACAuthorizationPolicyController: RouteCollection {
     
     // MARK: Create
     
-    func createCondition(_ req: Request) throws -> EventLoopFuture<View> {
+    func createCondition(_ req: Request) async throws -> View {
         guard let authPolicyUUID = req.query[UUID.self, at: "auth-policy-id"] else {
             throw Abort(HTTPResponseStatus.badRequest)
         }
@@ -414,24 +438,31 @@ struct ABACAuthorizationPolicyController: RouteCollection {
             possibleOperations: conditionOperationTypes,
             possibleLhsRhsTypes: conditionTypes,
             error: req.query[String.self, at: "error"])
-        return req.view.render("authPolicy/conditionValue", context)
+        return try await req.view.render("authPolicy/conditionValue", context)
     }
     
-    func createConditionPost(_ req: Request) throws -> EventLoopFuture<Response> {
+    func createConditionPost(_ req: Request) async throws -> Response {
         let condition = try req.content.decode(ABACCondition.self)
-        let conditionValueRequest = ResourceRequest<ABACCondition, ABACCondition>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.abacConditions.rawValue)")
-        return conditionValueRequest.futureCreate(req, resourceToSave: condition)
-            .map { apiResponse in
-                return req.redirect(to: "/authorization-policies")
-            }.flatMapErrorThrowing { error in
-                let errorMessage = error.getMessage()
-                return req.redirect(to: "/authorization-policies/create?error=\(errorMessage)")
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.abacConditions.rawValue)")
+        let response = try await req.client.post(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
+            try clientReq.content.encode(condition, as: .json)
+        }
+        do {
+            try response.checkHttpPutPostPatch(auth)
+            return req.redirect(to: "/authorization-policies")
+        } catch {
+            let errorMessage = error.getMessage()
+            return req.redirect(to: "/authorization-policies/create?error=\(errorMessage)")
         }
     }
     
     // MARK: Update
     
-    func updateConditionPost(_ req: Request) throws -> EventLoopFuture<View> {
+    func updateConditionPost(_ req: Request) async throws -> View {
         let condition = try req.content.decode(ABACCondition.self)
         let conditionValueTypes = ABACConditionModel.ConditionValueType.allCases.map { $0.rawValue }
         let conditionOperationTypes = ABACConditionModel.ConditionOperationType.allCases.map { $0.rawValue }
@@ -443,27 +474,34 @@ struct ABACAuthorizationPolicyController: RouteCollection {
             possibleOperations: conditionOperationTypes,
             possibleLhsRhsTypes: conditionLhsRhsTypes,
             formActionConditionValue: "update/confirm")
-        return req.view.render("authPolicy/conditionValue", context)
+        return try await req.view.render("authPolicy/conditionValue", context)
     }
     
-    func updateConditionConfirmPost(_ req: Request) throws -> EventLoopFuture<Response> {
+    func updateConditionConfirmPost(_ req: Request) async throws -> Response {
         let condition = try req.content.decode(ABACCondition.self)
         guard let uuid = condition.id?.uuidString else {
-            return req.eventLoop.makeSucceededFuture(req.redirect(to: "/authorization-policies?error=Update failed: UUID corrupt"))
+            return req.redirect(to: "/authorization-policies?error=Update failed: UUID corrupt")
         }
-        let conditionsRequest = ResourceRequest<ABACCondition, ABACCondition>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.abacConditions.rawValue)/\(uuid)")
-        return conditionsRequest.futureUpdate(req, resourceToUpdate: condition)
-            .map { apiResponse in
-                return req.redirect(to: "/authorization-policies")
-            }.flatMapErrorThrowing { error in
-                let errorMessage = error.getMessage()
-                return req.redirect(to: "/authorization-policies?error=\(errorMessage)")
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.abacConditions.rawValue)/\(uuid)")
+        let response = try await req.client.put(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
+            try clientReq.content.encode(condition, as: .json)
+        }
+        do {
+            try response.checkHttpPutPostPatch(auth)
+            return req.redirect(to: "/authorization-policies")
+        } catch {
+            let errorMessage = error.getMessage()
+            return req.redirect(to: "/authorization-policies?error=\(errorMessage)")
         }
     }
     
     // MARK: Delete
     
-    func deleteConditionPost(_ req: Request) throws -> EventLoopFuture<View> {
+    func deleteConditionPost(_ req: Request) async throws -> View {
         let condition = try req.content.decode(ABACCondition.self)
         let conditionValueTypes = [condition.type.rawValue]
         let conditionOperationTypes = [condition.operation.rawValue]
@@ -475,18 +513,25 @@ struct ABACAuthorizationPolicyController: RouteCollection {
             possibleOperations: conditionOperationTypes,
             possibleLhsRhsTypes: conditionLhsRhsTypes,
             formActionConditionValue: "delete/confirm")
-        return req.view.render("authPolicy/conditionValueDelete", context)
+        return try await req.view.render("authPolicy/conditionValueDelete", context)
     }
     
-    func deleteConditionConfirmPost(_ req: Request) throws -> EventLoopFuture<Response> {
+    func deleteConditionConfirmPost(_ req: Request) async throws -> Response {
         let condition = try req.content.decode(ABACCondition.self)
         guard let uuid = condition.id?.uuidString else {
-            return req.eventLoop.makeSucceededFuture(req.redirect(to: "/authorization-policies?error=Delete failed: UUID corrupt"))
+            return req.redirect(to: "/authorization-policies?error=Delete failed: UUID corrupt")
         }
-        let conditionValueRequest = ResourceRequest<NoRequestType, StatusCodeResponseType>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.abacConditions.rawValue)/\(uuid)")
-        return conditionValueRequest.fututeDelete(req).map { apiResponse in
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.abacConditions.rawValue)/\(uuid)")
+        let response = try await req.client.delete(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
+        }
+        do {
+            try response.checkHttpDeleteLogout(auth)
             return req.redirect(to: "/authorization-policies")
-        }.flatMapErrorThrowing { error in
+        } catch {
             let errorMessage = error.getMessage()
             return req.redirect(to: "/authorization-policies?error=\(errorMessage)")
         }

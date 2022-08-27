@@ -1,7 +1,7 @@
 import Vapor
 import Fluent
 
-struct AdminUserMigration: Migration {
+struct AdminUserMigration: AsyncMigration {
     
     enum Constant {
         static let name = "Admin"
@@ -9,7 +9,7 @@ struct AdminUserMigration: Migration {
         static let passwordLength = 16
     }
     
-    func prepare(on database: Database) -> EventLoopFuture<Void> {
+    func prepare(on database: Database) async throws {
         let random = [UInt8].random(count: Constant.passwordLength).base64
         print("\nPASSWORD: \(random)")
         let password = try? Bcrypt.hash(random)
@@ -20,11 +20,11 @@ struct AdminUserMigration: Migration {
         let user = UserModel(name: Constant.name,
                              email: Constant.email,
                              password: hashedPassword)
-        return user.save(on: database)
+        return try await user.save(on: database)
     }
     
-    func revert(on database: Database) -> EventLoopFuture<Void> {
-        UserModel.query(on: database).filter(\.$email == Constant.email)
+    func revert(on database: Database) async throws {
+        try await UserModel.query(on: database).filter(\.$email == Constant.email)
             .delete()
     }
     

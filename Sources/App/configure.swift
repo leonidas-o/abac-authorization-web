@@ -5,7 +5,6 @@ import Redis
 import ABACAuthorization
 import Leaf
 
-
 /// Called before your application initializes.
 public func configure(_ app: Application) throws {
     

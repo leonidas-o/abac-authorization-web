@@ -2,7 +2,6 @@ import Vapor
 import Redis
 import NIO
 
-
 struct RedisRepo: CacheRepo {
     
     let client: RedisClient
@@ -11,125 +10,111 @@ struct RedisRepo: CacheRepo {
     
     // MARK: - JSON Storage
     
-    func save<E>(key: String, to entity: E) -> EventLoopFuture<Void> where E: Encodable {
+    func save<E>(key: String, to entity: E) async throws where E: Encodable {
         let redisKey = RedisKey(key)
-        do {
-            return client.set(redisKey, to: try JSONEncoder().encode(entity))
-        } catch {
-            return client.eventLoop.makeFailedFuture(error)
-        }
+        try await client.set(redisKey, to: try JSONEncoder().encode(entity)).get()
     }
     
     
-    func get<D>(key: String, as type: D.Type) -> EventLoopFuture<D?> where D: Decodable {
+    
+    func get<D>(key: String, as type: D.Type) async throws -> D? where D: Decodable {
         let redisKey = RedisKey(key)
-        return client.get(redisKey, as: Data.self).flatMapThrowing { data in
-            return try data.flatMap { data in
-                return try JSONDecoder().decode(D.self, from: data)
-            }
+        
+        guard let result = try await client.get(redisKey, asJSON: D.self) else {
+            return nil
         }
+        return result
     }
     
     
-    func getExistingKeys<D>(using keys: [String], as type: [D].Type) -> EventLoopFuture<[D]> where D: Decodable {
+    func getExistingKeys<D>(using keys: [String], as type: [D].Type) async throws -> [D] where D: Decodable {
         let redisKeys = keys.map { RedisKey($0) }
-        return client.mget(redisKeys, as: Data.self).flatMapThrowing { data in
-            return try data.compactMap { data in
-                guard let data = data else {
-                    return nil
-                }
-                return try JSONDecoder().decode(D.self, from: data)
+        let data = try await client.mget(redisKeys, as: Data.self).get()
+        return try data.compactMap { data in
+            guard let data = data else {
+                return nil
             }
+            return try JSONDecoder().decode(D.self, from: data)
         }
     }
     
     
-    func setExpiration(forKey key: String, afterSeconds seconds: Int) -> EventLoopFuture<Bool> {
+    func setExpiration(forKey key: String, afterSeconds seconds: Int) async throws -> Bool {
         let redisKey = RedisKey(key)
-        return client.expire(redisKey, after: TimeAmount.seconds(Int64(seconds)))
+        return try await client.expire(redisKey, after: TimeAmount.seconds(Int64(seconds))).get()
     }
     
     
-    func delete(key: String) -> EventLoopFuture<Int> {
+    func delete(key: String) async throws -> Int {
         let redisKey = RedisKey(key)
-        return client.delete(redisKey)
+        return try await client.delete(redisKey).get()
     }
     
     
-    func delete(keys: [String]) -> EventLoopFuture<Int> {
+    func delete(keys: [String]) async throws -> Int {
         let redisKeys = keys.map { RedisKey($0) }
         if !keys.isEmpty {
-            return client.delete(redisKeys)
+            return try await client.delete(redisKeys).get()
         } else {
-            return client.eventLoop.makeSucceededFuture(0)
+            return 0
         }
     
     }
     
     
-    func timeToLive(key: String) -> EventLoopFuture<Int> {
+    func timeToLive(key: String) async throws -> Int {
         let redisKey = RedisKey(key)
-        return client.ttl(redisKey).flatMapThrowing { redisKeyLifeTime in
-            if let timeAmount = redisKeyLifeTime.timeAmount {
-                return Int(timeAmount.nanoseconds/1000000000)
-            } else {
-                return 0
-            }
+        let redisKeyLifeTime = try await client.ttl(redisKey).get()
+        if let timeAmount = redisKeyLifeTime.timeAmount {
+            return Int(timeAmount.nanoseconds/1000000000)
+        } else {
+            return 0
         }
     }
     
     
-    func exists(_ keys: String...) -> EventLoopFuture<Int> {
-        self.exists(keys)
+    func exists(_ keys: String...) async throws -> Int {
+        try await self.exists(keys)
     }
-    func exists(_ keys: [String]) -> EventLoopFuture<Int> {
+    func exists(_ keys: [String]) async throws -> Int {
         let redisKey = keys.map { RedisKey($0) }
-        return client.exists(redisKey)
+        return try await client.exists(redisKey).get()
     }
     
     
     
     // MARK: - Hash Storage
     
-    func getHash<D>(key: String, field: String, as type: D.Type) -> EventLoopFuture<D?> where D: Decodable {
+    func getHash<D>(key: String, field: String, as type: D.Type) async throws -> D? where D: Decodable {
         let redisKey = RedisKey(key)
-        return client.hget(field, from: redisKey, as: Data.self).flatMapThrowing { data in
-            return try data.flatMap{ data in
-                return try JSONDecoder().decode(D.self, from: data)
-            }
+        let data = try await client.hget(field, from: redisKey, as: Data.self).get()
+        return try data.flatMap { data in
+            return try JSONDecoder().decode(D.self, from: data)
         }
     }
     
     
-    func setHash<E>(_ key: String, field: String, to entity: E) -> EventLoopFuture<Bool> where E: Encodable {
+    func setHash<E>(_ key: String, field: String, to entity: E) async throws -> Bool where E: Encodable {
         let redisKey = RedisKey(key)
-        do {
-            return client.hset(field, to: try JSONEncoder().encode(entity), in: redisKey)
-        } catch {
-            return client.eventLoop.makeFailedFuture(error)
+        return try await client.hset(field, to: try JSONEncoder().encode(entity), in: redisKey).get()
+    }
+    
+    
+    func setMHash<E>(_ key: String, items: Dictionary<String, E>) async throws -> Void where E: Encodable {
+        let redisKey = RedisKey(key)
+        let redisItems  = try items.mapValues { values in
+            try JSONEncoder().encode(values)
         }
+        return try await client.hmset(redisItems, in: redisKey).get()
     }
     
     
-    func setMHash<E>(_ key: String, items: Dictionary<String, E>) -> EventLoopFuture<Void> where E: Encodable {
+    func deleteHash(_ key: String, fields: String...) async throws -> Int {
+        return try await deleteHash(key, fields: fields)
+    }
+    func deleteHash(_ key: String, fields: [String]) async throws -> Int {
         let redisKey = RedisKey(key)
-        do {
-            let redisItems  = try items.mapValues { values in
-                try JSONEncoder().encode(values)
-            }
-            return client.hmset(redisItems, in: redisKey)
-        } catch {
-            return client.eventLoop.makeFailedFuture(error)
-        }
-    }
-    
-    
-    func deleteHash(_ key: String, fields: String...) -> EventLoopFuture<Int> {
-        return deleteHash(key, fields: fields)
-    }
-    func deleteHash(_ key: String, fields: [String]) -> EventLoopFuture<Int> {
-        let redisKey = RedisKey(key)
-        return client.hdel(fields, from: redisKey)
+        return try await client.hdel(fields, from: redisKey).get()
     }
     
 }

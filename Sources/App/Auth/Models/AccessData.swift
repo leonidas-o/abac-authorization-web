@@ -3,7 +3,6 @@ import Fluent
 import Redis
 import ABACAuthorization
 
-
 /// An ephermal authentication token that identifies a registered user.
 struct AccessData: Codable {
     /// UserToken's unique identifier.

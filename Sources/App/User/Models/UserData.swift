@@ -2,7 +2,6 @@ import Vapor
 import Foundation
 import ABACAuthorization
 
-
 /// Internal version of UserData contains a regular user
 struct UserData: Codable {
     

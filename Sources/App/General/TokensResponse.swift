@@ -1,7 +1,6 @@
 import Vapor
 import Foundation
 
-
 struct TokensResponse: Codable {
     
     enum Constant {

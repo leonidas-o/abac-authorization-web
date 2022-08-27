@@ -1,6 +1,5 @@
 import Foundation
 
-
 enum ModelError: Error, LocalizedError, CustomStringConvertible {
     case idRequired
     case migrationFailed(reason: String)

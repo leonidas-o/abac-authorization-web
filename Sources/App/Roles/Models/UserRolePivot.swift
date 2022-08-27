@@ -1,7 +1,6 @@
 import Fluent
 import Foundation
 
-
 final class UserRolePivot: Model {
     
     static let schema = "user_role_pivot"
@@ -24,9 +23,9 @@ final class UserRolePivot: Model {
 
 // MARK: - Migration
 
-struct UserRolePivotMigration: Migration {
-    func prepare(on database: Database) -> EventLoopFuture<Void> {
-        database.schema("user_role_pivot")
+struct UserRolePivotMigration: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        try await database.schema("user_role_pivot")
             .id()
             .field("user_id", .uuid, .required, .references("user", "id", onDelete: .cascade))
             .field("role_id", .int, .required, .references("role", "id", onDelete: .cascade))
@@ -34,8 +33,8 @@ struct UserRolePivotMigration: Migration {
             .create()
     }
 
-    func revert(on database: Database) -> EventLoopFuture<Void> {
-        database.schema("user_role_pivot")
+    func revert(on database: Database) async throws {
+        try await database.schema("user_role_pivot")
             .delete()
     }
 }

@@ -2,7 +2,6 @@ import Vapor
 import Fluent
 import ABACAuthorization
 
-
 protocol UserDefinition {
     var id: UUID? { get set }
     var name: String { get set }
@@ -96,44 +95,37 @@ extension UserModel {
     }
 }
 
-struct UserModelBasicAuthenticator: BasicAuthenticator {
+struct UserModelBasicAuthenticator: AsyncBasicAuthenticator {
     typealias User = App.UserModel
 
-    func authenticate(basic: BasicAuthorization, for request: Request) -> EventLoopFuture<Void> {
-        UserModel.query(on: request.db)
-            .filter(\.$email == basic.username)
-            .first()
-            .flatMapThrowing {
-            guard let user = $0 else {
-                // TODO: Test on invalid auth what the response code is
-                return
-            }
-            guard try user.verify(password: basic.password) else {
-                return
-            }
-            request.auth.login(user)
+    func authenticate(basic: BasicAuthorization, for request: Request) async throws {
+        guard let user = try await UserModel.query(on: request.db).filter(\.$email == basic.username).first() else {
+            return
         }
-   }
+        guard try user.verify(password: basic.password) else {
+            return
+        }
+        request.auth.login(user)
+    }
 }
 
 // Token Authentication
 // Note: Used the manual approach, instead Fluents 'ModelTokenAuthenticatable'
-struct UserModelBearerAuthenticator: BearerAuthenticator {
+struct UserModelBearerAuthenticator: AsyncBearerAuthenticator {
 
     struct AccessDataKey: StorageKey {
         typealias Value = AccessData
     }
     
-    func authenticate(bearer: BearerAuthorization, for request: Request) -> EventLoopFuture<Void> {
-        return request.cacheRepo.get(key: bearer.token, as: AccessData.self).flatMap { accessData in
-            guard let accessData = accessData else {
-                return request.eventLoop.makeSucceededFuture(())
-            }
-            let user = accessData.userData.user.convertToUserModel()
-            request.auth.login(user)
-            request.storage.set(AccessDataKey.self, to: accessData)
-            return request.eventLoop.makeSucceededFuture(())
+    func authenticate(bearer: BearerAuthorization, for request: Request) async throws {
+        let accessData = try await request.cacheRepo.get(key: bearer.token, as: AccessData.self)
+        guard let accessData = accessData else {
+            return
         }
+        let user = accessData.userData.user.convertToUserModel()
+        request.auth.login(user)
+        request.storage.set(AccessDataKey.self, to: accessData)
+        return
     }
 }
 
@@ -142,9 +134,9 @@ struct UserModelBearerAuthenticator: BearerAuthenticator {
 // MARK: - Migration
 
 /// Allows `User` to be used as a Fluent migration.
-struct UserModelMigration: Migration {
-    func prepare(on database: Database) -> EventLoopFuture<Void> {
-        database.schema("user")
+struct UserModelMigration: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        try await database.schema("user")
         .id()
         .field("name", .string, .required)
         .field("email", .string, .required)
@@ -154,8 +146,8 @@ struct UserModelMigration: Migration {
         .create()
     }
     
-    func revert(on database: Database) -> EventLoopFuture<Void> {
-        database.schema("user")
+    func revert(on database: Database) async throws {
+        try await database.schema("user")
         .delete()
     }
 }

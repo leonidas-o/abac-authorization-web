@@ -3,14 +3,14 @@ import Crypto
 import ABACAuthorization
 
 protocol RolePersistenceRepo {
-    func getAll() -> EventLoopFuture<[RoleModel]>
-    func get(_ role: RoleModel) -> EventLoopFuture<RoleModel?>
-    func get(_ roleId: RoleModel.IDValue) -> EventLoopFuture<RoleModel?>
-    func _getAllUsersFor(_ role: RoleModel) -> EventLoopFuture<[UserModel]>
-    func save(_ role: RoleModel) -> EventLoopFuture<Void>
-    func update(_ role: RoleModel, _ updatedRole: Role) -> EventLoopFuture<Void>
-    func delete(_ roleId: RoleModel.IDValue) -> EventLoopFuture<Void>
-    func delete(_ role: RoleModel) -> EventLoopFuture<Void>
+    func getAll() async throws -> [RoleModel]
+    func get(_ role: RoleModel) async throws -> RoleModel?
+    func get(_ roleId: RoleModel.IDValue) async throws -> RoleModel?
+    func _getAllUsersFor(_ role: RoleModel) async throws -> [UserModel]
+    func save(_ role: RoleModel) async throws
+    func update(_ role: RoleModel, _ updatedRole: Role) async throws
+    func delete(_ roleId: RoleModel.IDValue) async throws
+    func delete(_ role: RoleModel) async throws
 }
 
 
@@ -48,51 +48,51 @@ struct RolesController: RouteCollection {
     
     // MARK: - API
     
-    func apiGetAll(_ req: Request) throws -> EventLoopFuture<[Role]> {
-        return req.roleRepo.getAll().map { roles in
-            return roles.map { $0.convertToRole() }
-        }
+    func apiGetAll(_ req: Request) async throws -> [Role] {
+        let roles = try await req.roleRepo.getAll()
+        return roles.map { $0.convertToRole() }
     }
     
     
-    func apiGetUsers(_ req: Request) throws -> EventLoopFuture<[User.Public]> {
+    func apiGetUsers(_ req: Request) async throws -> [User.Public] {
         guard let roleId = req.parameters.get("roleId", as: Int.self) else {
             throw Abort(.badRequest)
         }
-        return req.roleRepo.get(roleId).unwrap(or: Abort(.badRequest)).flatMap { role in
-            return req.roleRepo._getAllUsersFor(role).map { users in
-                return users.map { $0.convertToUserPublic() }
-            }
+        guard let role = try await req.roleRepo.get(roleId) else {
+            throw Abort(.badRequest)
         }
+        let users = try await req.roleRepo._getAllUsersFor(role)
+        return users.map { $0.convertToUserPublic() }
     }
     
     
-    func apiCreate(_ req: Request) throws -> EventLoopFuture<Role> {
+    func apiCreate(_ req: Request) async throws -> Role {
         let content = try req.content.decode(Role.self)
         let role = content.convertToRoleModel()
-        return req.roleRepo.save(role)
-            .transform(to: role.convertToRole())
+        try await req.roleRepo.save(role)
+        return role.convertToRole()
     }
     
     
-    func apiUpdate(_ req: Request) throws -> EventLoopFuture<Role> {
+    func apiUpdate(_ req: Request) async throws -> Role {
         guard let roleId = req.parameters.get("roleId", as: Int.self) else {
             throw Abort(.badRequest)
         }
         let updatedRole = try req.content.decode(Role.self)
-        return req.roleRepo.get(roleId).unwrap(or: Abort(.badRequest)).flatMap { role in
-            return req.roleRepo.update(role, updatedRole)
-                .transform(to: role.convertToRole())
+        guard let role = try await req.roleRepo.get(roleId) else {
+            throw Abort(.badRequest)
         }
+        try await req.roleRepo.update(role, updatedRole)
+        return role.convertToRole()
     }
     
     
-    func apiDelete(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    func apiDelete(_ req: Request) async throws -> HTTPStatus {
         guard let roleId = req.parameters.get("roleId", as: Int.self) else {
             throw Abort(.badRequest)
         }
-        return req.roleRepo.delete(roleId)
-            .transform(to: .noContent)
+        try await req.roleRepo.delete(roleId)
+        return .noContent
     }
 
     
@@ -106,37 +106,52 @@ struct RolesController: RouteCollection {
     
     // MARK: Read
     
-    func overview(_ req: Request) throws -> EventLoopFuture<View> {
-        let roleRequest = ResourceRequest<NoRequestType, [Role]>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
-        
-        return roleRequest.futureGetAll(req).flatMap { apiResponse in
-            let context = RolesOverviewContext(
-                title: "Roles",
-                content: apiResponse,
-                formActionUpdate: "/roles/update",
-                formActionDelete: "/roles/delete",
-                error: req.query[String.self, at: "error"])
-            return req.view.render("role/roles", context)
+    func overview(_ req: Request) async throws -> View {
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
+        let response = try await req.client.get(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
         }
+        try response.checkHttpGet(auth)
+        let responseDecoded = try response.content.decode([Role].self)
+        
+        let context = RolesOverviewContext(
+            title: "Roles",
+            content: responseDecoded,
+            formActionUpdate: "/roles/update",
+            formActionDelete: "/roles/delete",
+            error: req.query[String.self, at: "error"])
+        return try await req.view.render("role/roles", context)
     }
     
     
     
     // MARK: Create
     
-    func create(_ req: Request) throws -> EventLoopFuture<View> {
+    func create(_ req: Request) async throws -> View {
         let context = CreateRoleContext(
             title: "Create Role",
             error: req.query[String.self, at: "error"])
-        return req.view.render("role/role", context)
+        return try await req.view.render("role/role", context)
     }
     
-    func createPost(_ req: Request) throws -> EventLoopFuture<Response> {
+    func createPost(_ req: Request) async throws -> Response {
         let role = try req.content.decode(Role.self)
-        let roleRequest = ResourceRequest<Role, Role>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
-        return roleRequest.futureCreate(req, resourceToSave: role).map { apiResponse in
+        
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
+        let response = try await req.client.post(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
+            try clientReq.content.encode(role, as: .json)
+        }
+        do {
+            try response.checkHttpPutPostPatch(auth)
             return req.redirect(to: "/roles")
-        }.flatMapErrorThrowing { error in
+        } catch {
             let errorMessage = error.getMessage()
             return req.redirect(to: "/roles/create?error=\(errorMessage)")
         }

@@ -3,7 +3,6 @@ import Fluent
 import Foundation
 import ABACAuthorization
 
-
 final class RoleModel: Model {
     
     static let schema = "role"
@@ -52,17 +51,17 @@ extension Role {
 
 // MARK: - Migrations
 
-struct RoleModelMigration: Migration {
-    func prepare(on database: Database) -> EventLoopFuture<Void> {
-        database.schema("role")
+struct RoleModelMigration: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        try await database.schema("role")
         .field(.id, .int, .identifier(auto: true), .required)
         .field("name", .string, .required)
         .unique(on: "name")
         .create()
     }
     
-    func revert(on database: Database) -> EventLoopFuture<Void> {
-        database.schema("role")
+    func revert(on database: Database) async throws {
+        try await database.schema("role")
         .delete()
     }
 }

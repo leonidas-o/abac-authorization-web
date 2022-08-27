@@ -19,7 +19,7 @@ struct Auth {
     
     
     func isAuthenticated() -> Bool {
-        guard let token = getAccessToken() else {
+        guard let token = accessToken else {
             return false
         }
         if token.isEmpty {
@@ -30,8 +30,8 @@ struct Auth {
     }
     
     
-    func getAccessToken() -> String? {
-        return req.session.data[TokensResponse.Constant.defaultsAccessToken] ?? nil
+    var accessToken: String? {
+        return req.session.data[TokensResponse.Constant.defaultsAccessToken]
     }
     
 }

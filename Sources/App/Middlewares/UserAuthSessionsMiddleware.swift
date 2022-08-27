@@ -1,8 +1,7 @@
 import Vapor
 import Foundation
 
-
-final class UserAuthSessionsMiddleware: Middleware {
+final class UserAuthSessionsMiddleware: AsyncMiddleware {
     
     private let authUrl: String
     private let redirectPath: String
@@ -14,69 +13,52 @@ final class UserAuthSessionsMiddleware: Middleware {
     }
 
     
-    func respond(to request: Request, chainingTo next: Responder) -> EventLoopFuture<Response> {
+    func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
         
         guard let accessToken = request.session.data[TokensResponse.Constant.defaultsAccessToken] else {
             return redirect(request)
         }
         
         // authenticate
-        return apiAccessRequest(request, usingURL: authUrl, accessToken: accessToken).flatMap { response in
-            // if already authenticated go on
-            if response.status == .ok {
-                do {
-                    try self.authUser(request, with: response)
-                } catch {
-                    return request.eventLoop.makeFailedFuture(error)
-                }
-                return next.respond(to: request)
-            }
-            
-            // else authenticate
-            guard response.status == .unauthorized else {
-                return request.eventLoop.makeFailedFuture(Abort(.internalServerError))
-            }
-            let newAccessData: AccessData
-            do {
-                newAccessData = try response.content.decode(AccessData.self)
-            }
-            catch {
-                return request.eventLoop.makeFailedFuture(error)
-            }
-            request.session.data[TokensResponse.Constant.defaultsAccessToken] = newAccessData.token
-            
-            return self.apiAccessRequest(request, usingURL: self.authUrl, accessToken: newAccessData.token).flatMap { response in
-                // if authenticated go on
-                if response.status == .ok {
-                    do {
-                        try self.authUser(request, with: response)
-                    } catch {
-                        return request.eventLoop.makeFailedFuture(error)
-                    }
-                    return next.respond(to: request)
-                }
-                // else logout
-                guard response.status == .unauthorized else {
-                    return request.eventLoop.makeFailedFuture(Abort(.internalServerError))
-                }
-                return self.logout(on: request)
-            }
+        let response1 = try await apiAccessRequest(request, usingURL: authUrl, accessToken: accessToken)
+        
+        // if already authenticated go on
+        if response1.status == .ok {
+            try self.authUser(request, with: response1)
+            return try await next.respond(to: request)
         }
         
+        // else authenticate
+        guard response1.status == .unauthorized else {
+            throw Abort(.internalServerError)
+        }
+        let newAccessData = try response1.content.decode(AccessData.self)
+        request.session.data[TokensResponse.Constant.defaultsAccessToken] = newAccessData.token
+        let response2 = try await apiAccessRequest(request, usingURL: self.authUrl, accessToken: newAccessData.token)
+        // if authenticated go on
+        if response2.status == .ok {
+            try self.authUser(request, with: response2)
+            return try await next.respond(to: request)
+        }
+        // else logout
+        guard response2.status == .unauthorized else {
+            throw Abort(.internalServerError)
+        }
+        return self.logout(on: request)
     }
     
     
     
     
-    private func apiAccessRequest(_ req: Request, usingURL url: String, accessToken: String) -> EventLoopFuture<ClientResponse> {
-        return req.client.post(URI(string: url)) { clientRequest in
+    private func apiAccessRequest(_ req: Request, usingURL url: String, accessToken: String) async throws -> ClientResponse {
+        return try await req.client.post(URI(string: url)) { clientRequest in
             try clientRequest.content.encode(AuthenticateData(token: accessToken))
         }
     }
     
-    private func logout(on request: Request) -> EventLoopFuture<Response> {
+    private func logout(on request: Request) -> Response {
         request.session.data[TokensResponse.Constant.defaultsAccessToken] = ""
-        return self.redirect(request)
+        return redirect(request)
     }
     
     private func authUser(_ req: Request, with response: ClientResponse) throws {
@@ -84,8 +66,7 @@ final class UserAuthSessionsMiddleware: Middleware {
         req.auth.login(user)
     }
     
-    private func redirect(_ req: Request) -> EventLoopFuture<Response> {
-        let redirect = req.redirect(to: self.redirectPath)
-        return req.eventLoop.makeSucceededFuture(redirect)
+    private func redirect(_ req: Request) -> Response {
+        return req.redirect(to: self.redirectPath)
     }
 }

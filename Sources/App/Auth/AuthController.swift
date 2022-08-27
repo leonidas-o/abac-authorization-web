@@ -1,6 +1,5 @@
 import Vapor
 
-
 struct AuthController: RouteCollection {
     
     enum Constant {
@@ -34,31 +33,29 @@ struct AuthController: RouteCollection {
     
     // MARK: session based backend service only
     // (UserAuthSessionsMiddleware)
-    func authenticate(_ req: Request) throws -> EventLoopFuture<User.Public> {
+    func authenticate(_ req: Request) async throws -> User.Public {
         let data = try req.content.decode(AuthenticateData.self)
-        return req.cacheRepo.get(key: data.token, as: AccessData.self).unwrap(or: Abort(.unauthorized)).flatMapThrowing { accessData in
-            return accessData.userData.user.convertToUserPublic()
+        guard let accessData = try await req.cacheRepo.get(key: data.token, as: AccessData.self) else {
+            throw Abort(.unauthorized)
         }
+        return accessData.userData.user.convertToUserPublic()
     }
 
     
     
     // MARK: - basic authentication
     
-    func loginHandler(_ req: Request) throws -> EventLoopFuture<TokensResponse> {
+    func loginHandler(_ req: Request) async throws -> TokensResponse {
         let user = try req.auth.require(UserModel.self)
         
-        return req.userRepo.getAllRoles(user)
-            .and(getActiveAccessToken(req, for: user)).flatMap { userRoles, activeAccessToken in
-            
-            user.cachedAccessToken = activeAccessToken?.token
-            let userData = UserData(user: user.convertToUser(),
-                                    roles: userRoles.map { $0.convertToRole() })
-            return saveNewAccessData(req, userData: userData).map { accessData in
-                return TokensResponse(accessData: accessData.convertToAccessDataPublic())
-            }
-        }
-        
+        async let userRoles = req.userRepo.getAllRoles(user)
+        async let activeAccessToken = getActiveAccessToken(req, for: user)
+                    
+        user.cachedAccessToken = try await activeAccessToken?.token
+        let userData = UserData(user: user.convertToUser(),
+                                roles: try await userRoles.map { $0.convertToRole() })
+        let accessData = try await saveNewAccessData(req, userData: userData)
+        return TokensResponse(accessData: accessData.convertToAccessDataPublic())
     }
     
     
@@ -66,11 +63,12 @@ struct AuthController: RouteCollection {
     // MARK: - token authentication
     
     
-    func logoutHandler(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    func logoutHandler(_ req: Request) async throws -> HTTPStatus {
         guard let accessToken = req.headers.bearerAuthorization else {
             throw Abort(HTTPResponseStatus.internalServerError)
         }
-        return cache.delete(key: accessToken.token).transform(to: .noContent)
+        _ = try await cache.delete(key: accessToken.token)
+        return .noContent
     }
     
     
@@ -82,30 +80,23 @@ struct AuthController: RouteCollection {
 
 // MARK: - Private helper methods
 extension AuthController {
-    private func getActiveAccessToken(_ req: Request, for user: UserModel) -> EventLoopFuture<AccessData?> {
+    private func getActiveAccessToken(_ req: Request, for user: UserModel) async throws -> AccessData? {
         if let cachedAccessToken = user.cachedAccessToken, !cachedAccessToken.isEmpty  {
-            return req.cacheRepo.getExistingKeys(using: [cachedAccessToken], as: [AccessData].self).map { array in
-                return array.first
-            }
+            let array = try await req.cacheRepo.getExistingKeys(using: [cachedAccessToken], as: [AccessData].self)
+            return array.first
         } else {
-            return req.eventLoop.makeSucceededFuture(nil)
+            return nil
         }
     }
     
-    private func saveNewAccessData(_ req: Request, userData: UserData, expires expirationTime: Int = Constant.accessTokenExpirationDefault) -> EventLoopFuture<AccessData> {
-        var newAccessData: AccessData
-        do {
-            newAccessData = try AccessData.generate(withTokenCount: Constant.accessTokenCount, for: userData)
-        } catch {
-            return req.eventLoop.makeFailedFuture(error)
-        }
-        return req.userRepo.updateUser(fromUserData: newAccessData.userData).flatMap { savedUser in
-            newAccessData.userData.user = savedUser.convertToUser()
-            newAccessData = newAccessData.wipeOutUserPassword()
-            return req.cacheRepo.save(key: newAccessData.token, to: newAccessData).flatMap {
-                return req.cacheRepo.setExpiration(forKey: newAccessData.token, afterSeconds: expirationTime)
-            }.transform(to: newAccessData)
-        }
+    private func saveNewAccessData(_ req: Request, userData: UserData, expires expirationTime: Int = Constant.accessTokenExpirationDefault) async throws -> AccessData {
+        var newAccessData = try AccessData.generate(withTokenCount: Constant.accessTokenCount, for: userData)
+        let savedUser = try await req.userRepo.updateUser(fromUserData: newAccessData.userData)
+        newAccessData.userData.user = savedUser.convertToUser()
+        newAccessData = newAccessData.wipeOutUserPassword()
+        try await req.cacheRepo.save(key: newAccessData.token, to: newAccessData)
+        _ = try await req.cacheRepo.setExpiration(forKey: newAccessData.token, afterSeconds: expirationTime)
+        return newAccessData
     }
     
 }

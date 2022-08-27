@@ -1,10 +1,10 @@
-// swift-tools-version:5.2
+// swift-tools-version:5.5
 import PackageDescription
 
 let package = Package(
     name: "abac-authorization-web",
     platforms: [
-        .macOS(.v10_15),
+        .macOS(.v12),
     ],
     products: [
         .library(name: "ABACAuthorizationWeb", targets: ["App"]),
@@ -15,7 +15,7 @@ let package = Package(
         .package(url: "https://github.com/vapor/fluent-postgres-driver.git", from: "2.0.0"),
         .package(url: "https://github.com/vapor/leaf.git", from: "4.0.0"),
         .package(url: "https://github.com/vapor/redis.git", from: "4.0.0"),
-        .package(url: "https://github.com/leonidas-o/abac-authorization.git", .branch("master")),
+        .package(url: "https://github.com/leonidas-o/abac-authorization.git", .exact("0.9.0-alpha.5")),
         .package(name: "DNSClient", url: "https://github.com/OpenKitten/NioDNS.git", from: "2.0.0"),
     ],
     targets: [

@@ -1,25 +1,24 @@
 import Vapor
 import ABACAuthorization
 
-
 protocol UserPersistenceRepo {
     // User
-    func getAllUsersWithRoles() -> EventLoopFuture<[UserModel]>
-    func get(_ userId: UserModel.IDValue) -> EventLoopFuture<UserModel?>
-    func getWithRoles(_ userId: UserModel.IDValue) -> EventLoopFuture<UserModel?>
-    func get(byEmail email: String) -> EventLoopFuture<UserModel?>
-    func save(_ user: UserModel) -> EventLoopFuture<Void>
-    func createUser(fromUserData userData: UserData) -> EventLoopFuture<UserModel>
-    func updateUser(fromUserData userData: UserData) -> EventLoopFuture<UserModel>
-    func updateUserInformation(_ user: UserModel, _ updatedUser: User.Public) -> EventLoopFuture<Void>
-    func remove(_ user: UserModel) -> EventLoopFuture<Void>
-    func remove(_ userId: UserModel.IDValue) -> EventLoopFuture<Void>
+    func getAllUsersWithRoles() async throws -> [UserModel]
+    func get(_ userId: UserModel.IDValue) async throws -> UserModel?
+    func getWithRoles(_ userId: UserModel.IDValue) async throws -> UserModel?
+    func get(byEmail email: String) async throws -> UserModel?
+    func save(_ user: UserModel) async throws
+    func createUser(fromUserData userData: UserData) async throws -> UserModel
+    func updateUser(fromUserData userData: UserData) async throws -> UserModel
+    func updateUserInformation(_ user: UserModel, _ updatedUser: User.Public) async throws
+    func remove(_ user: UserModel) async throws
+    func remove(_ userId: UserModel.IDValue) async throws
     // Role
-    func addRole(_ role: RoleModel, to user: UserModel) -> EventLoopFuture<Void>
-    func getAllRoles(_ user: UserModel) -> EventLoopFuture<[RoleModel]>
-    func getAllRoles(_ userId: UserModel.IDValue) -> EventLoopFuture<[RoleModel]>
-    func removeRole(_ role: RoleModel, from user: UserModel) -> EventLoopFuture<Void>
-    func removeAllRoles(_ user: UserModel) -> EventLoopFuture<Void>
+    func addRole(_ role: RoleModel, to user: UserModel) async throws
+    func getAllRoles(_ user: UserModel) async throws -> [RoleModel]
+    func getAllRoles(_ userId: UserModel.IDValue) async throws -> [RoleModel]
+    func removeRole(_ role: RoleModel, from user: UserModel) async throws
+    func removeAllRoles(_ user: UserModel) async throws
 }
 
 
@@ -87,155 +86,166 @@ struct UserController: RouteCollection {
     
     // MARK: Internal
     
-    func apiGetAll(_ req: Request) throws -> EventLoopFuture<[UserData.Public]> {
-        return req.userRepo.getAllUsersWithRoles().map { users in
-            return users.map {
-                UserData.Public(user: $0.convertToUserPublic(),
-                                roles: $0.roles.map {  $0.convertToRole() })
-            }
+    func apiGetAll(_ req: Request) async throws -> [UserData.Public] {
+        let users = try await req.userRepo.getAllUsersWithRoles()
+        return users.map {
+            UserData.Public(user: $0.convertToUserPublic(),
+                            roles: $0.roles.map {  $0.convertToRole() })
         }
     }
     
     
-    func apiGet(_ req: Request) throws -> EventLoopFuture<UserData.Public> {
+    func apiGet(_ req: Request) async throws -> UserData.Public {
         guard let userId = req.parameters.get("userId", as: UUID.self) else {
             throw Abort(.badRequest)
         }
-        return req.userRepo.getWithRoles(userId).unwrap(or: Abort(.badRequest)).map { user in
-            return UserData.Public(user: user.convertToUserPublic(),
-                                   roles: user.roles.map { $0.convertToRole() })
+        guard let user = try await req.userRepo.getWithRoles(userId) else {
+            throw Abort(.badRequest)
         }
+        return UserData.Public(user: user.convertToUserPublic(),
+                               roles: user.roles.map { $0.convertToRole() })
     }
     
     
-    func apiCreate(_ req: Request) throws -> EventLoopFuture<User.Public> {
+    func apiCreate(_ req: Request) async throws -> User.Public {
         var userData = try req.content.decode(UserData.self)
         userData.user.password = try Bcrypt.hash(userData.user.password)
-        return req.userRepo.createUser(fromUserData: userData).map { user in
-            return user.convertToUserPublic()
-        }
+        
+        let user = try await req.userRepo.createUser(fromUserData: userData)
+        return user.convertToUserPublic()
     }
     
     
-    func apiUpdate(_ req: Request) throws -> EventLoopFuture<UserData.Public> {
+    func apiUpdate(_ req: Request) async throws -> UserData.Public {
         guard let userId = req.parameters.get("userId", as: UUID.self) else {
             throw Abort(.badRequest)
         }
         let updatedUser = try req.content.decode(User.Public.self)
         
-        return req.userRepo.get(userId).unwrap(or: Abort(.badRequest)).flatMap { user in
-            return req.userRepo.updateUserInformation(user, updatedUser)
-                .and(req.cacheRepo.get(key: user.cachedAccessToken ?? "", as: AccessData.self).unwrap(or: Abort(.internalServerError))).flatMap { _, cachedAccessData in
-                
-                guard let accessTokenString = user.cachedAccessToken else {
-                    return req.eventLoop.makeFailedFuture(Abort(.internalServerError))
-                }
-                let updatedUserData = UserData(user: user.convertToUser(),
-                                               roles: cachedAccessData.userData.roles)
-                return updateCachedAccessData(req, forToken: accessTokenString, userData: updatedUserData)
-                    .transform(to: updatedUserData.convertToUserDataPublic())
-            }
+        guard let user = try await req.userRepo.get(userId) else {
+            throw Abort(.badRequest)
         }
+        async let userUpdate: () = req.userRepo.updateUserInformation(user, updatedUser)
+        async let cacheGet = req.cacheRepo.get(key: user.cachedAccessToken ?? "", as: AccessData.self)
+        
+        guard let accessTokenString = user.cachedAccessToken,
+        let cachedAccessData = try await cacheGet else {
+            throw Abort(.internalServerError)
+        }
+        _ = try await userUpdate
+        let updatedUserData = UserData(user: user.convertToUser(),
+                                       roles: cachedAccessData.userData.roles)
+        try await updateCachedAccessData(req, forToken: accessTokenString, userData: updatedUserData)
+        return updatedUserData.convertToUserDataPublic()
     }
     
     
-    func apiDelete(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    func apiDelete(_ req: Request) async throws -> HTTPStatus {
         guard let userId = req.parameters.get("userId", as: UUID.self) else {
             throw Abort(.badRequest)
         }
-        return req.userRepo.get(userId).unwrap(or: Abort(.badRequest)).flatMap { user in
-            return req.userRepo.remove(user).flatMap { _ -> EventLoopFuture<Int> in
-                guard let accessTokenString = user.cachedAccessToken else {
-                    return req.eventLoop.makeFailedFuture(Abort(.internalServerError))
-                }
-                return req.cacheRepo.delete(key: accessTokenString)
-            }.transform(to: .noContent)
+        guard let user = try await req.userRepo.get(userId) else {
+            throw Abort(.badRequest)
         }
+        try await req.userRepo.remove(user)
+        guard let accessTokenString = user.cachedAccessToken else {
+            throw Abort(.internalServerError)
+        }
+        _ = try await req.cacheRepo.delete(key: accessTokenString)
+        return .noContent
     }
     
     
     
     // MARK: Siblings Relationships
     
-    func apiAddRole(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    func apiAddRole(_ req: Request) async throws -> HTTPStatus {
         guard let userId = req.parameters.get("userId", as: UUID.self),
               let roleId = req.parameters.get("roleId", as: Int.self) else {
             throw Abort(.badRequest)
         }
-        return req.userRepo.get(userId).unwrap(or: Abort(.badRequest))
-            .and(req.roleRepo.get(roleId).unwrap(or: Abort(.badRequest))).flatMap { user, role in
-            return req.userRepo.addRole(role, to: user)
-                .and(req.cacheRepo.get(key: user.cachedAccessToken ?? "", as: AccessData.self).unwrap(or: Abort(.internalServerError))).flatMap { _, cachedAccessData in
-                
-                var roles = cachedAccessData.userData.roles
-                roles.append(role.convertToRole())
-            
-                guard let accessTokenString = user.cachedAccessToken else {
-                    return req.eventLoop.makeFailedFuture(Abort(.internalServerError))
-                }
-                let updatedUserData = UserData(user: user.convertToUser(),
-                                               roles: roles)
-                return updateCachedAccessData(req, forToken: accessTokenString, userData: updatedUserData)
-                    .transform(to: .created)
-            }
+        
+        async let user = req.userRepo.get(userId)
+        async let role = req.roleRepo.get(roleId)
+        guard let user = try await user,
+              let role = try await role else {
+            throw Abort(.badRequest)
         }
+        
+        async let addRole: () = req.userRepo.addRole(role, to: user)
+        async let cacheGet = req.cacheRepo.get(key: user.cachedAccessToken ?? "", as: AccessData.self)
+        guard let cachedAccessData = try await cacheGet else {
+            throw Abort(.internalServerError)
+        }
+        try await addRole
+        var roles = cachedAccessData.userData.roles
+        roles.append(role.convertToRole())
+    
+        guard let accessTokenString = user.cachedAccessToken else {
+            throw Abort(.internalServerError)
+        }
+        let updatedUserData = UserData(user: user.convertToUser(),
+                                       roles: roles)
+        try await updateCachedAccessData(req, forToken: accessTokenString, userData: updatedUserData)
+        return .created
     }
     
     
-    func apiGetRole(_ req: Request) throws -> EventLoopFuture<[Role]> {
+    func apiGetRole(_ req: Request) async throws -> [Role] {
         guard let userId = req.parameters.get("userId", as: UUID.self) else {
             throw Abort(.badRequest)
         }
-        return req.userRepo.getAllRoles(userId).map { roles in
-            return roles.map { $0.convertToRole() }
-        }
+        let roles = try await req.userRepo.getAllRoles(userId)
+        return roles.map { $0.convertToRole() }
     }
     
     
-    func apiRemoveRole(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    func apiRemoveRole(_ req: Request) async throws -> HTTPStatus {
         guard let userId = req.parameters.get("userId", as: UUID.self),
               let roleId = req.parameters.get("roleId", as: Int.self) else {
             throw Abort(.badRequest)
         }
-        return req.userRepo.get(userId).unwrap(or: Abort(.badRequest))
-            .and(req.roleRepo.get(roleId).unwrap(or: Abort(.badRequest))).flatMap { user, role in
-            return req.userRepo.removeRole(role, from: user)
-                .and(req.cacheRepo.get(key: user.cachedAccessToken ?? "", as: AccessData.self).unwrap(or: Abort(.internalServerError))).flatMap { _, cachedAccessData in
-                
-                var roles = cachedAccessData.userData.roles
-                roles.removeAll { $0 == role.convertToRole() }
-            
-                guard let accessTokenString = user.cachedAccessToken else {
-                    return req.eventLoop.makeFailedFuture(Abort(.internalServerError))
-                }
-                let updatedUserData = UserData(user: user.convertToUser(),
-                                               roles: roles)
-                return updateCachedAccessData(req, forToken: accessTokenString, userData: updatedUserData)
-                    .transform(to: .noContent)
-            }
+        async let user = req.userRepo.get(userId)
+        async let role = req.roleRepo.get(roleId)
+        guard let user = try await user,
+              let role = try await role else {
+            throw Abort(.badRequest)
         }
+        async let removeRole: () = req.userRepo.removeRole(role, from: user)
+        async let cacheGet = req.cacheRepo.get(key: user.cachedAccessToken ?? "", as: AccessData.self)
+        guard let cachedAccessData = try await cacheGet else {
+            throw Abort(.internalServerError)
+        }
+        try await removeRole
+        
+        var roles = cachedAccessData.userData.roles
+        roles.removeAll { $0 == role.convertToRole() }
+    
+        guard let accessTokenString = user.cachedAccessToken else {
+            throw Abort(.internalServerError)
+        }
+        let updatedUserData = UserData(user: user.convertToUser(),
+                                       roles: roles)
+        try await updateCachedAccessData(req, forToken: accessTokenString, userData: updatedUserData)
+        return .noContent
     }
     
     
-    // This handler has no route, it's not accessible, its test
-    // is commented out
-    func apiRemoveAllRoles(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    // This handler has no route, it's not accessible
+    func apiRemoveAllRoles(_ req: Request) async throws -> HTTPStatus {
         guard let userId = req.parameters.get("userId", as: UUID.self) else {
             throw Abort(.badRequest)
         }
-        return req.userRepo.get(userId).unwrap(or: Abort(.badRequest)).flatMap { user in
-            return req.userRepo.removeAllRoles(user)
-                .transform(to: user)
-        }.flatMap { user in
-            guard let accessTokenString = user.cachedAccessToken else {
-                return req.eventLoop.makeFailedFuture(Abort(.internalServerError))
-            }
-            let updatedUserData = UserData(user: user.convertToUser(),
-                                           roles: [])
-            return updateCachedAccessData(req, forToken: accessTokenString, userData: updatedUserData)
-//                .transform(to: updatedUserData.convertToUserDataPublic())
-                .transform(to: .noContent)
+        guard let user = try await req.userRepo.get(userId) else {
+            throw Abort(.badRequest)
         }
+        try await req.userRepo.removeAllRoles(user)
+        guard let accessTokenString = user.cachedAccessToken else {
+            throw Abort(.internalServerError)
+        }
+        let updatedUserData = UserData(user: user.convertToUser(), roles: [])
+        try await updateCachedAccessData(req, forToken: accessTokenString, userData: updatedUserData)
+        return .noContent
     }
     
     
@@ -247,34 +257,32 @@ struct UserController: RouteCollection {
         return cachedUser.convertToUserPublic()
     }
     
-    func apiUpdateMyUser(_ req: Request) throws -> EventLoopFuture<UserData.Public> {
+    func apiUpdateMyUser(_ req: Request) async throws -> UserData.Public {
         guard let accessToken = req.headers.bearerAuthorization else {
             throw Abort(HTTPResponseStatus.unauthorized)
         }
         let user = try req.auth.require(UserModel.self)
         let updatedUser = try req.content.decode(User.Public.self)
         
-        return req.userRepo.updateUserInformation(user, updatedUser).flatMap {
-            guard let cachedAccessData = req.storage.get(UserModelBearerAuthenticator.AccessDataKey.self) else {
-                return req.eventLoop.makeFailedFuture(Abort(.internalServerError))
-            }
-            let updatedUserData = UserData(user: user.convertToUser(),
-                                    roles: cachedAccessData.userData.roles)
-            return updateCachedAccessData(req, forToken: accessToken.token, userData: updatedUserData)
-                .transform(to: updatedUserData.convertToUserDataPublic())
+        try await req.userRepo.updateUserInformation(user, updatedUser)
+        guard let cachedAccessData = req.storage.get(UserModelBearerAuthenticator.AccessDataKey.self) else {
+            throw Abort(.internalServerError)
         }
+        let updatedUserData = UserData(user: user.convertToUser(), roles: cachedAccessData.userData.roles)
+        try await updateCachedAccessData(req, forToken: accessToken.token, userData: updatedUserData)
+        return updatedUserData.convertToUserDataPublic()
     }
     
     
-    func apiDeleteMyUser(_ req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    func apiDeleteMyUser(_ req: Request) async throws -> HTTPStatus {
         let cachedUser = try req.auth.require(UserModel.self)
         let userId = try cachedUser.requireID()
-        return req.userRepo.get(userId).unwrap(or: Abort(.internalServerError)).flatMap { user in
-            return req.userRepo.remove(user).flatMap {
-                return req.cacheRepo.delete(key: user.cachedAccessToken ?? "")
-                    .transform(to: .noContent)
-            }
+        guard let user = try await req.userRepo.get(userId) else {
+            throw Abort(.internalServerError)
         }
+        try await req.userRepo.remove(user)
+        _ = try await req.cacheRepo.delete(key: user.cachedAccessToken ?? "")
+        return .noContent
     }
     
     
@@ -293,13 +301,13 @@ struct UserController: RouteCollection {
     
     // MARK: Private helper methods
     
-    private func updateCachedAccessData(_ req: Request, forToken token: String, userData: UserData) -> EventLoopFuture<Void> {
+    private func updateCachedAccessData(_ req: Request, forToken token: String, userData: UserData) async throws {
         guard let userId = userData.user.id else {
-            return req.eventLoop.makeFailedFuture(ModelError.idRequired)
+            throw ModelError.idRequired
         }
         let updatedAccessData = AccessData(token: token, userId: userId, userData: userData)
             .wipeOutUserPassword()
-        return req.cacheRepo.save(key: token, to: updatedAccessData)
+        try await req.cacheRepo.save(key: token, to: updatedAccessData)
     }
     
     
@@ -308,77 +316,101 @@ struct UserController: RouteCollection {
     
     // MARK: - FRONTEND
     
-    func overviewHandlerFE(_ req: Request) throws -> EventLoopFuture<View> {
-        let userRequest = ResourceRequest<NoRequestType, [UserData.Public]>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.users.rawValue)")
-        
-        return userRequest.futureGetAll(req).flatMap { apiResponse in
-            let context = UsersOverviewContext(
-                title: "Users",
-                content: apiResponse,
-                formActionUpdate: "/users/update",
-                formActionDelete: "/users/delete",
-                error: req.query[String.self, at: "error"])
-            return req.view.render("user/users", context)
+    func overviewHandlerFE(_ req: Request) async throws -> View {
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.users.rawValue)")
+        let response = try await req.client.get(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
         }
+        try response.checkHttpGet(auth)
+        let responseDecoded = try response.content.decode([UserData.Public].self)
+        let context = UsersOverviewContext(
+            title: "Users",
+            content: responseDecoded,
+            formActionUpdate: "/users/update",
+            formActionDelete: "/users/delete",
+            error: req.query[String.self, at: "error"])
+        return try await req.view.render("user/users", context)
     }
     
     
-    func updatePostHandlerFE(_ req: Request) throws -> EventLoopFuture<View> {
+    func updatePostHandlerFE(_ req: Request) async throws -> View {
         let user = try req.content.decode(User.Public.self)
         guard let userId = user.id else {
             throw Abort(.internalServerError)
         }
-        let userRequest = ResourceRequest<NoRequestType, UserData.Public>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.users.rawValue)/\(userId)")
-        return userRequest.futureGetAll(req).flatMap { apiResponse in
-            
-            let context = UpdateUserContext(
-                title: "Update User",
-                titleRoles: "Update Roles",
-                userData: apiResponse,
-                formAction: "update/confirm",
-                addRolesURI: "role/add?user-id=\(userId.uuidString)",
-                formActionRoleUpdate: "role/update",
-                formActionRoleDelete: "role/delete")
-            return req.view.render("user/user", context)
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.users.rawValue)/\(userId)")
+        let response = try await req.client.get(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
         }
+        try response.checkHttpGet(auth)
+        let responseDecoded = try response.content.decode(UserData.Public.self)
+        let context = UpdateUserContext(
+            title: "Update User",
+            titleRoles: "Update Roles",
+            userData: responseDecoded,
+            formAction: "update/confirm",
+            addRolesURI: "role/add?user-id=\(userId.uuidString)",
+            formActionRoleUpdate: "role/update",
+            formActionRoleDelete: "role/delete")
+        return try await req.view.render("user/user", context)
     }
     
     
-    func updateConfirmPostHandlerFE(_ req: Request) throws -> EventLoopFuture<Response> {
+    func updateConfirmPostHandlerFE(_ req: Request) async throws -> Response {
         let user = try req.content.decode(User.Public.self)
         guard let userId = user.id else {
-            return req.eventLoop.makeSucceededFuture(req.redirect(to: "/users?error=Update failed: UUID corrupt"))
+            return req.redirect(to: "/users?error=Update failed: UUID corrupt")
         }
-        let userRequest = ResourceRequest<User.Public, UserData.Public>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.users.rawValue)/\(userId)")
-        return userRequest.futureUpdate(req, resourceToUpdate: user)
-            .map { apiResponse in
-                return req.redirect(to: "/users")
-            }.flatMapErrorThrowing { error in
-                let errorMessage = error.getMessage()
-                return req.redirect(to: "/users?error=\(errorMessage)")
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.users.rawValue)/\(userId)")
+        let response = try await req.client.put(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
+            try clientReq.content.encode(user, as: .json)
+        }
+        do {
+            try response.checkHttpPutPostPatch(auth)
+            return req.redirect(to: "/users")
+        } catch {
+            let errorMessage = error.getMessage()
+            return req.redirect(to: "/users?error=\(errorMessage)")
         }
     }
     
     
-    func deletePostHandlerFE(_ req: Request) throws -> EventLoopFuture<View> {
+    func deletePostHandlerFE(_ req: Request) async throws -> View {
         let user = try req.content.decode(User.Public.self)
         let context = DeleteUserContext(
             title: "Delete User",
             user: user,
             formAction: "delete/confirm")
-        return req.view.render("user/userDelete", context)
+        return try await req.view.render("user/userDelete", context)
     }
     
     
-    func deleteConfirmPostHandlerFE(_ req: Request) throws -> EventLoopFuture<Response> {
+    func deleteConfirmPostHandlerFE(_ req: Request) async throws -> Response {
         let user = try req.content.decode(User.Public.self)
         guard let userId = user.id else {
-            return req.eventLoop.makeSucceededFuture(req.redirect(to: "/users?error=Delete failed: UUID corrupt"))
+            return req.redirect(to: "/users?error=Delete failed: UUID corrupt")
         }
-        let userRequest = ResourceRequest<NoRequestType, StatusCodeResponseType>(resourcePath: "/api/users/\(userId)")
-        return userRequest.fututeDelete(req).map { apiResponse in
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.users.rawValue)/\(userId)")
+        let response = try await req.client.delete(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
+        }
+        do {
+            try response.checkHttpDeleteLogout(auth)
             return req.redirect(to: "/users")
-        }.flatMapErrorThrowing { error in
+        } catch {
             let errorMessage = error.getMessage()
             return req.redirect(to: "/users?error=\(errorMessage)")
         }
@@ -392,30 +424,36 @@ struct UserController: RouteCollection {
     
     // MARK: Create
     
-    func addRoleHandlerFE(_ req: Request) throws -> EventLoopFuture<View> {
+    func addRoleHandlerFE(_ req: Request) async throws -> View {
         guard let userId = req.query[UUID.self, at: "user-id"] else {
             throw Abort(HTTPResponseStatus.badRequest)
         }
-        let userRequest = ResourceRequest<NoRequestType, UserData.Public>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.users.rawValue)/\(userId.uuidString)")
-        let rolesRequest = ResourceRequest<NoRequestType, [Role]>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
         
-        return userRequest.futureGetAll(req)
-            .and(rolesRequest.futureGetAll(req)).flatMap { userData, roles in
-            
-            let assignedRoles = Set(userData.roles)
-            var possibleRoles = roles
-            possibleRoles.removeAll(where: { assignedRoles.contains($0) })
-            
-            let context = AddRoleContext(
-                title: "Add Role",
-                user: userData.user,
-                possibleRoles: possibleRoles,
-                error: req.query[String.self, at: "error"])
-            return req.view.render("user/role", context)
-        }
+        let auth = Auth(req: req)
+        guard let token = auth.accessToken else { throw Abort(.unauthorized, reason: "Invalid token") }
+        let userUri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.users.rawValue)/\(userId.uuidString)")
+        let rolesUri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
+        async let userRequest = req.client.get(userUri) { $0.headers.bearerAuthorization = BearerAuthorization(token: token) }
+        async let rolesRequest = req.client.get(rolesUri) { $0.headers.bearerAuthorization = BearerAuthorization(token: token) }
+        let userResponse = try await userRequest
+        let rolesResponse = try await rolesRequest
+        try userResponse.checkHttpGet(auth)
+        try rolesResponse.checkHttpGet(auth)
+        let userResponseDecoded = try userResponse.content.decode(UserData.Public.self)
+        let rolesResponseDecoded = try rolesResponse.content.decode([Role].self)
+        
+        let assignedRoles = Set(userResponseDecoded.roles)
+        var possibleRoles = rolesResponseDecoded
+        possibleRoles.removeAll(where: { assignedRoles.contains($0) })
+        let context = AddRoleContext(
+            title: "Add Role",
+            user: userResponseDecoded.user,
+            possibleRoles: possibleRoles,
+            error: req.query[String.self, at: "error"])
+        return try await req.view.render("user/role", context)
     }
     
-    func addRolePostHandlerFE(_ req: Request) throws -> EventLoopFuture<Response> {
+    func addRolePostHandlerFE(_ req: Request) async throws -> Response {
         let role = try req.content.decode(Role.self)
         guard let userId = req.query[UUID.self, at: "user-id"] else {
             throw Abort(.internalServerError)
@@ -426,13 +464,17 @@ struct UserController: RouteCollection {
         guard let roleId = role.id else {
             throw Abort(.internalServerError)
         }
-        let noRequestType = NoRequestType()
-        
-        let addRoleRequest = ResourceRequest<NoRequestType, StatusCodeResponseType>(resourcePath: "/\(APIResource._apiEntry)/\(APIResource.Resource.users.rawValue)/\(userId.uuidString)/\(APIResource.Resource.roles.rawValue)/\(String(roleId))")
-        
-        return addRoleRequest.futureCreateWithoutResponseData(req, resourceToSave: noRequestType).map{ apiResponse in
+        let auth = Auth(req: req)
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.users.rawValue)/\(userId.uuidString)/\(APIResource.Resource.roles.rawValue)/\(String(roleId))")
+        let response = try await req.client.post(uri) { clientReq in
+            if let token = auth.accessToken {
+                clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
+            }
+        }
+        do {
+            try response.checkHttpPutPostPatch(auth)
             return req.redirect(to: "/users")
-        }.flatMapErrorThrowing { error in
+        } catch {
             let errorMessage = error.getMessage()
             return req.redirect(to: "/users?error=\(errorMessage)")
         }
