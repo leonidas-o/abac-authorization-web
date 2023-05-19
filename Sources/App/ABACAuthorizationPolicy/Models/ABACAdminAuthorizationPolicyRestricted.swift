@@ -9,7 +9,7 @@ struct RestrictedABACAuthorizationPoliciesMigration: AsyncMigration {
     let readRoles = "\(ABACAPIAction.read)\(APIResource.Resource.roles.rawValue)"
     let readAuths = "\(ABACAPIAction.read)\(APIResource.Resource.auth.rawValue)"
     
-    let updateAuthPolicyServiceActionOnResource = "\(ABACAPIAction.create)\(APIResource.Resource.abacAuthPoliciesService.rawValue)"
+    let updateAuthPolicyServiceActionOnResource = "\(ABACAPIAction.update)\(APIResource.Resource.abacAuthPoliciesService.rawValue)"
     
     func prepare(on database: Database) async throws {
         // Admin

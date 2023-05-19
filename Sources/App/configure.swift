@@ -6,7 +6,7 @@ import ABACAuthorization
 import Leaf
 
 /// Called before your application initializes.
-public func configure(_ app: Application) throws {
+public func configure(_ app: Application) async throws {
     
     // MARK: NIO HTTP Server
     
@@ -51,11 +51,14 @@ public func configure(_ app: Application) throws {
     }
     let databaseUsername = Environment.get("DATABASE_USERNAME") ?? "abacauthweb"
     let databasePassword = Environment.get("DATABASE_PASSWORD") ?? "abac12345"
-    app.databases.use(.postgres(hostname: databaseHostname,
-                                port: databasePort,
-                                username: databaseUsername,
-                                password: databasePassword,
-                                database: databaseName), as: .psql)
+    let sqlPostgresConfiguration = SQLPostgresConfiguration(hostname: databaseHostname,
+                                                            port: databasePort,
+                                                            username: databaseUsername,
+                                                            password: databasePassword,
+                                                            database: databaseName,
+                                                            tls: .prefer(try .init(configuration: .clientDefault))
+    )
+    app.databases.use(.postgres(configuration: sqlPostgresConfiguration), as: .psql)
     
     // Model lifecycle events
     app.databases.middleware.use(ABACAuthorizationPolicyModelMiddleware())
@@ -109,7 +112,7 @@ public func configure(_ app: Application) throws {
 //    if (app.environment != .testing) {
         app.migrations.add(RestrictedABACAuthorizationPoliciesMigration())
 //    }
-    try app.autoMigrate().wait()
+    try await app.autoMigrate()
     
     
     // MARK: Leaf

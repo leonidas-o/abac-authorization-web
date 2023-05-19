@@ -149,6 +149,8 @@ struct ABACAuthorizationPolicyController: RouteCollection {
             return try await triggerRecreationForAllInstances(req, address: address)
         } else {
             let policies = try await req.abacAuthorizationRepo.getAllWithConditions()
+            // flush all current policies before recreating
+            req.abacAuthorizationPolicyService.removeAllFromInMemoryCollection()
             for policy in policies {
                 try req.abacAuthorizationPolicyService.addToInMemoryCollection(policy: policy, conditions: policy.conditions)
             }
@@ -201,7 +203,7 @@ struct ABACAuthorizationPolicyController: RouteCollection {
                 switch record {
                 case .a(let resourceRecord):
                     taskGroup.addTask {
-                        _ = try await req.client.put(URI(string:"\(resourceRecord.resource.stringAddress):\(APIConnection.port)/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)/\(APIResource.Resource.abacAuthPoliciesService.rawValue)"), headers: headers)
+                        _ = try await req.client.put(URI(string:"http://\(resourceRecord.resource.stringAddress):\(APIConnection.port)/\(APIResource._apiEntry)/\(APIResource.Resource.abacAuthPolicies.rawValue)/\(APIResource.Resource.abacAuthPoliciesService.rawValue)"), headers: headers)
                     }
                 default:
                     continue // do nothing
@@ -261,7 +263,7 @@ struct ABACAuthorizationPolicyController: RouteCollection {
     
     func create(_ req: Request) async throws -> View {
         let auth = Auth(req: req)
-        let uri = URI(string: "/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
+        let uri = URI(string: "\(APIConnection.apiBaseURL)/\(APIResource._apiEntry)/\(APIResource.Resource.roles.rawValue)")
         let response = try await req.client.get(uri) { clientReq in
             if let token = auth.accessToken {
                 clientReq.headers.bearerAuthorization = BearerAuthorization(token: token)
