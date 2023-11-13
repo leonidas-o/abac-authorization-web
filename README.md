@@ -34,7 +34,7 @@ A big benefit of the ABACAuthorizationPolicy, you don't need to restart the api/
 
 
 ## ABACConditions
-Conditions are not mandatory and can be neglected if not needed. If needed they can be created on all "cached" values. That means, everything in `AccessData.UserData` can be used.
+Conditions (Attributes) are not mandatory and can be neglected if not needed. If needed they can be created on all "cached" values. That means, everything in `AccessData.UserData` can be used.
 
 Starting from within `UserData` Model, specify a path using dot notation. 
 Condition examples: 
