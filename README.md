@@ -1,4 +1,12 @@
-# ABACAuthorizationWeb
+# ABACAuthorizationWeb (DEPRECATED)
+
+This project has been deprecated in favour of the new abac-authorization toolkit:
+
+https://github.com/leonidas-o/abac-authorization-toolkit
+
+It still contains a lot of useful information, especially in the readme but won't be updated anymore.
+
+---
 
 This is a Demo for the attribute based access control authorization system for Swift Vapor Framework.
 The demo uses Postgres, Fluent and Redis. Using PostgreSQL and Redis is not mandatory. You can use other Fluent compatible databases and any caching system you like. Docker and the project's `docker-compose.yml` file will help you setup the environment via `docker-compose up -d`.
